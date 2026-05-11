@@ -1,0 +1,40 @@
+plugins {
+    id 'java'
+}
+
+base {
+    archivesName = "$rootProject.archives_name-paper-plugin-$project.version"
+}
+
+tasks.withType(AbstractArchiveTask).configureEach {
+    archiveVersion = ''
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'PaperMC'
+        url = 'https://repo.papermc.io/repository/maven-public/'
+    }
+}
+
+dependencies {
+    compileOnly "io.papermc.paper:paper-api:$rootProject.minecraft_version-R0.1-SNAPSHOT"
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+processResources {
+    inputs.property 'version', project.version
+
+    filesMatching('plugin.yml') {
+        expand version: project.version
+    }
+}

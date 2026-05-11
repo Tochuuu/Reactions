@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "reactions_server_relay",
+  "version": "${version}",
+  "name": "Reactions Server Relay",
+  "description": "Server-side relay for Reactions client configuration sync.",
+  "authors": [
+    "Tochuuu"
+  ],
+  "license": "GPL-3.0",
+  "environment": "server",
+  "entrypoints": {
+    "main": [
+      "me.tochuuu.reactions.fabric.server.ReactionsFabricServerRelay"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "minecraft": ">=1.21.11",
+    "java": ">=21",
+    "fabric-api": "*"
+  }
+}

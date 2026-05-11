@@ -1,0 +1,6 @@
+name: ReactionsRelay
+version: ${version}
+main: me.tochuuu.reactions.paper.ReactionsRelayPlugin
+api-version: '1.21'
+author: Tochuuu
+description: Relays Reactions client config packets between players.

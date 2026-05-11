@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "reactions",
+  "version": "${version}",
+  "name": "Reactions",
+  "description": "",
+  "authors": [
+    "Tochuuu"
+  ],
+  "contact": {
+    "homepage": ""
+  },
+  "license": "GPL-3.0",
+  "icon": "icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "me.tochuuu.reactions.fabric.client.ReactionsFabricClient"
+    ],
+    "modmenu": [
+      "me.tochuuu.reactions.fabric.client.modmenu.ReactionsModMenu"
+    ]
+  },
+  "mixins": [
+    "reactions.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.2",
+    "minecraft": ">=1.21 <1.21.4",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "modmenu": "*"
+  }
+}

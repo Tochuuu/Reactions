@@ -29,6 +29,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AbstractClientPlayer
     private static final int IDLE_LOOK_STEP_TICKS = 14;
     private static final int IDLE_LOOK_ANIMATION_TICKS = IDLE_LOOK_STEP_TICKS * 3;
     private static final int IDLE_LOOK_CYCLE_TICKS = IDLE_LOOK_DELAY_TICKS + IDLE_LOOK_ANIMATION_TICKS;
+    private static final int BOW_FULL_CHARGE_TICKS = 20;
+    private static final float SQUINT_VISIBLE_EYE_COVERAGE = 0.5F;
     private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, 10, 11, 2, 1);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
 
@@ -63,19 +65,21 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AbstractClientPlayer
         boolean blinking = !sleeping && animationsEnabled && isBlinking(player, ageInTicks, config);
         int mirroredEye = animationsEnabled && !blinking ? mirroredIdleEye(player, ageInTicks) : 0;
         HumanoidArm spyglassArm = spyglassUseArm(player);
-        boolean closeLeftEye = sleeping || animationsEnabled && (blinking || spyglassArm == HumanoidArm.LEFT);
-        boolean closeRightEye = sleeping || animationsEnabled && (blinking || spyglassArm == HumanoidArm.RIGHT);
+        HumanoidArm bowArm = bowUseArm(player);
+        boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(player, bowArm);
+        EyeExpression leftEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, bowSquint);
+        EyeExpression rightEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, bowSquint);
 
         poseStack.pushPose();
         getParentModel().head.translateAndRotate(poseStack);
         VertexConsumer consumer = bufferSource.getBuffer(renderType);
         int overlay = LivingEntityRenderer.getOverlayCoords(player, 0.0F);
-        submitEye(poseStack, consumer, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, closeLeftEye, mirroredEye == -1);
-        submitEye(poseStack, consumer, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, closeRightEye, mirroredEye == 1);
+        submitEye(poseStack, consumer, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1);
+        submitEye(poseStack, consumer, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1);
         poseStack.popPose();
     }
 
-    private static void submitEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, boolean blinking, boolean mirrored) {
+    private static void submitEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored) {
         int clampedSkinX = clamp(skinX, 0, (int) SKIN_SIZE - eyeWidth);
         int clampedSkinY = clamp(skinY, 0, (int) SKIN_SIZE - eyeHeight);
         int clampedEyelidSkinX = clamp(eyelidColorX, 0, (int) SKIN_SIZE - 1);
@@ -84,7 +88,12 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AbstractClientPlayer
         float dstY1 = skinY - HEAD_FRONT_V - 8.0F;
         float dstY2 = dstY1 + eyeHeight;
 
-        if (mirrored && !blinking) {
+        if (expression == EyeExpression.SQUINT) {
+            submitSquintEye(poseStack, consumer, light, overlay, clampedSkinX, clampedSkinY, clampedEyelidSkinX, clampedEyelidSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, mirrored);
+            return;
+        }
+
+        if (mirrored && expression != EyeExpression.CLOSED) {
             for (int column = 0; column < eyeWidth; column++) {
                 int sourceX = clampedSkinX + eyeWidth - 1 - column;
                 int sourceY = clampedSkinY;
@@ -102,7 +111,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AbstractClientPlayer
         int sourceX = clampedSkinX;
         int sourceY;
 
-        if (blinking) {
+        if (expression == EyeExpression.CLOSED) {
             sourceX = clampedEyelidSkinX;
             sourceY = clampedEyelidSkinY;
         } else {
@@ -113,10 +122,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AbstractClientPlayer
 
         float u1 = sourceX / SKIN_SIZE;
         float v1 = sourceY / SKIN_SIZE;
-        float u2 = (sourceX + (blinking ? 1 : eyeWidth)) / SKIN_SIZE;
-        float v2 = (sourceY + (blinking ? 1 : eyeHeight)) / SKIN_SIZE;
+        float u2 = (sourceX + (expression == EyeExpression.CLOSED ? 1 : eyeWidth)) / SKIN_SIZE;
+        float v2 = (sourceY + (expression == EyeExpression.CLOSED ? 1 : eyeHeight)) / SKIN_SIZE;
 
-        int color = blinking ? EYELID_DARKEN_COLOR : NORMAL_COLOR;
+        int color = expression == EyeExpression.CLOSED ? EYELID_DARKEN_COLOR : NORMAL_COLOR;
         quad(consumer, poseStack.last(), dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color);
     }
 
@@ -138,6 +147,12 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AbstractClientPlayer
         }
     }
 
+    private enum EyeExpression {
+        OPEN,
+        SQUINT,
+        CLOSED
+    }
+
 
     private static void quad(VertexConsumer consumer, PoseStack.Pose pose, float x1, float y1, float x2, float y2, float u1, float v1, float u2, float v2, int light, int overlay, int color) {
         vertex(consumer, pose, x1, y2, u1, v2, light, overlay, color);
@@ -153,6 +168,49 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AbstractClientPlayer
             .setOverlay(overlay)
             .setLight(light)
             .setNormal(pose, 0.0F, 0.0F, -1.0F);
+    }
+
+    private static void submitSquintEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyelidX, int eyelidY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, boolean mirrored) {
+        float visibleHeight = Math.max(0.333F, (dstY2 - dstY1) * SQUINT_VISIBLE_EYE_COVERAGE);
+        float splitY = Math.max(dstY1, dstY2 - visibleHeight);
+        float dstX2 = dstX1 + eyeWidth;
+        float eyelidU1 = eyelidX / SKIN_SIZE;
+        float eyelidV1 = eyelidY / SKIN_SIZE;
+        float eyelidU2 = (eyelidX + 1) / SKIN_SIZE;
+        float eyelidV2 = (eyelidY + 1) / SKIN_SIZE;
+        quad(consumer, poseStack.last(), dstX1, dstY1, dstX2, splitY, eyelidU1, eyelidV1, eyelidU2, eyelidV2, light, overlay, EYELID_DARKEN_COLOR);
+
+        float sourceVisibleHeight = eyeHeight * SQUINT_VISIBLE_EYE_COVERAGE;
+        float sourceY1 = skinY + eyeHeight - sourceVisibleHeight;
+        if (mirrored) {
+            for (int column = 0; column < eyeWidth; column++) {
+                int sourceX = skinX + eyeWidth - 1 - column;
+                float columnDstX1 = dstX1 + column;
+                float columnDstX2 = columnDstX1 + 1.0F;
+                float u1 = sourceX / SKIN_SIZE;
+                float v1 = sourceY1 / SKIN_SIZE;
+                float u2 = (sourceX + 1) / SKIN_SIZE;
+                float v2 = (skinY + eyeHeight) / SKIN_SIZE;
+                quad(consumer, poseStack.last(), columnDstX1, splitY, columnDstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
+            }
+            return;
+        }
+
+        float u1 = skinX / SKIN_SIZE;
+        float v1 = sourceY1 / SKIN_SIZE;
+        float u2 = (skinX + eyeWidth) / SKIN_SIZE;
+        float v2 = (skinY + eyeHeight) / SKIN_SIZE;
+        quad(consumer, poseStack.last(), dstX1, splitY, dstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
+    }
+
+    private static EyeExpression eyeExpression(boolean sleeping, boolean animationsEnabled, boolean blinking, boolean spyglassClosed, boolean bowSquint) {
+        if (sleeping || animationsEnabled && (blinking || spyglassClosed)) {
+            return EyeExpression.CLOSED;
+        }
+        if (animationsEnabled && bowSquint) {
+            return EyeExpression.SQUINT;
+        }
+        return EyeExpression.OPEN;
     }
 
     private static boolean isBlinking(AbstractClientPlayer player, float ageInTicks, ReactionsClientConfig config) {
@@ -175,6 +233,23 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AbstractClientPlayer
             return useArm;
         }
         return null;
+    }
+
+    private static HumanoidArm bowUseArm(AbstractClientPlayer player) {
+        if (!player.isUsingItem()) {
+            return null;
+        }
+
+        HumanoidArm useArm = player.getUsedItemHand() == InteractionHand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
+        ItemStack useStack = player.getUseItem();
+        if (useStack.is(Items.BOW)) {
+            return useArm;
+        }
+        return null;
+    }
+
+    private static boolean isBowFullyDrawn(AbstractClientPlayer player, HumanoidArm bowArm) {
+        return bowArm != null && player.getTicksUsingItem() >= BOW_FULL_CHARGE_TICKS;
     }
 
     private static int seededOffset(int entityId, int index, int maxExclusive) {

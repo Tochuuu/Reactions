@@ -23,6 +23,7 @@ public final class ReactionsClientConfig {
     public boolean enabled = true;
     public boolean animateSelf = true;
     public boolean animateOthers = true;
+    public boolean animateBowShooting = false;
     public int leftEyeX = 9;
     public int leftEyeY = 12;
     public int rightEyeX = 13;

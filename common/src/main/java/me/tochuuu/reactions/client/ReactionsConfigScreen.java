@@ -17,6 +17,7 @@ public final class ReactionsConfigScreen extends Screen {
     private static final int SKIN_SIZE = 64;
     private static final int BASE_FACE_SIZE = 192;
     private static final int MIN_FACE_SIZE = 96;
+    private static final int COMPACT_FACE_SIZE = 64;
     private static final int PANEL_WIDTH = 168;
     private static final int MAX_EYE_WIDTH = 2;
     private static final int MAX_EYE_HEIGHT = 3;
@@ -30,6 +31,7 @@ public final class ReactionsConfigScreen extends Screen {
     private int faceSize;
     private int pixelSize;
     private int sizeLimitMessageTicks;
+    private boolean compactLayout;
 
     public ReactionsConfigScreen(Screen parent) {
         super(Component.literal("Reactions"));
@@ -38,9 +40,15 @@ public final class ReactionsConfigScreen extends Screen {
 
     @Override
     protected void init() {
+        compactLayout = this.width < 360 || this.height < 360;
+        if (compactLayout) {
+            initCompact();
+            return;
+        }
+
         boolean stacked = this.width < BASE_FACE_SIZE + 24 + PANEL_WIDTH + 24;
         int availableFaceWidth = stacked ? this.width - 24 : this.width - PANEL_WIDTH - 48;
-        int availableFaceHeight = stacked ? this.height - 250 : this.height - 112;
+        int availableFaceHeight = stacked ? this.height - 274 : this.height - 112;
         faceSize = clamp(Math.min(Math.min(BASE_FACE_SIZE, availableFaceWidth), availableFaceHeight), MIN_FACE_SIZE, BASE_FACE_SIZE);
         pixelSize = Math.max(1, faceSize / FACE_PIXELS);
         faceSize = pixelSize * FACE_PIXELS;
@@ -87,6 +95,13 @@ public final class ReactionsConfigScreen extends Screen {
             rebuildWidgets();
         }).bounds(panelX, y, PANEL_WIDTH, 20).build());
 
+        y += 24;
+        addRenderableWidget(Button.builder(Component.literal("Beta animations..."), button -> {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen(new ReactionsBetaAnimationsScreen(this));
+            }
+        }).bounds(panelX, y, PANEL_WIDTH, 20).build());
+
         y += 32;
         eyeSizeHeaderY = y - 12;
         addSizeButton("Width", panelX, y, true, -1);
@@ -95,7 +110,7 @@ public final class ReactionsConfigScreen extends Screen {
         addSizeButton("Height", panelX, y, false, -1);
         addSizeButton("Height", panelX + 88, y, false, 1);
 
-        int buttonY = Math.max(y + 32, this.height - 30);
+        int buttonY = Math.min(Math.max(y + 32, this.height - 30), this.height - 24);
         addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
             ReactionsClientConfig.reset();
             mode = EditMode.LEFT_EYE;
@@ -107,14 +122,96 @@ public final class ReactionsConfigScreen extends Screen {
         }).bounds(this.width / 2 + 15, buttonY, 90, 20).build());
     }
 
+    private void initCompact() {
+        faceSize = Math.min(COMPACT_FACE_SIZE, Math.max(48, Math.min(this.width - 24, this.height - 176)));
+        pixelSize = Math.max(1, faceSize / FACE_PIXELS);
+        faceSize = pixelSize * FACE_PIXELS;
+        faceX = Math.max(8, this.width / 2 - faceSize / 2);
+        faceY = 24;
+
+        int gap = 8;
+        int buttonHeight = 18;
+        int rowStep = 19;
+        int buttonWidth = Math.max(80, Math.min(148, (this.width - 24 - gap) / 2));
+        int contentWidth = buttonWidth * 2 + gap;
+        int leftX = Math.max(8, this.width / 2 - contentWidth / 2);
+        int rightX = leftX + buttonWidth + gap;
+        int y = faceY + faceSize + 8;
+
+        addRenderableWidget(Button.builder(enabledText(), button -> {
+            ReactionsClientConfig.get().enabled = !ReactionsClientConfig.get().enabled;
+            ReactionsClientConfig.save();
+            rebuildWidgets();
+        }).bounds(leftX, y, buttonWidth, buttonHeight).build());
+        addRenderableWidget(Button.builder(Component.literal("Beta animations..."), button -> {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen(new ReactionsBetaAnimationsScreen(this));
+            }
+        }).bounds(rightX, y, buttonWidth, buttonHeight).build());
+
+        y += rowStep;
+        addModeButton(EditMode.LEFT_EYE, leftX, y, buttonWidth, buttonHeight);
+        addModeButton(EditMode.RIGHT_EYE, rightX, y, buttonWidth, buttonHeight);
+
+        y += rowStep;
+        addModeButton(EditMode.EYEDROPPER, leftX, y, buttonWidth, buttonHeight);
+        addRenderableWidget(Button.builder(selfAnimationText(), button -> {
+            ReactionsClientConfig.get().animateSelf = !ReactionsClientConfig.get().animateSelf;
+            ReactionsClientConfig.save();
+            rebuildWidgets();
+        }).bounds(rightX, y, buttonWidth, buttonHeight).build());
+
+        y += rowStep;
+        addRenderableWidget(Button.builder(otherAnimationText(), button -> {
+            ReactionsClientConfig.get().animateOthers = !ReactionsClientConfig.get().animateOthers;
+            ReactionsClientConfig.save();
+            rebuildWidgets();
+        }).bounds(leftX, y, buttonWidth, buttonHeight).build());
+        addSizeButton("Width", rightX, y, true, -1, buttonWidth, buttonHeight);
+
+        y += rowStep;
+        addSizeButton("Width", leftX, y, true, 1, buttonWidth, buttonHeight);
+        addSizeButton("Height", rightX, y, false, -1, buttonWidth, buttonHeight);
+
+        y += rowStep;
+        addSizeButton("Height", leftX, y, false, 1, buttonWidth, buttonHeight);
+        addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
+            ReactionsClientConfig.reset();
+            mode = EditMode.LEFT_EYE;
+            rebuildWidgets();
+        }).bounds(rightX, y, buttonWidth, buttonHeight).build());
+
+        y += rowStep;
+        addRenderableWidget(Button.builder(Component.literal("Done"), button -> {
+            ReactionsClientConfig.save();
+            onClose();
+        }).bounds(this.width / 2 - buttonWidth / 2, Math.min(y, this.height - buttonHeight - 4), buttonWidth, buttonHeight).build());
+    }
+
     private void addModeButton(EditMode targetMode, int x, int y) {
+        addModeButton(targetMode, x, y, PANEL_WIDTH);
+    }
+
+    private void addModeButton(EditMode targetMode, int x, int y, int width) {
+        addModeButton(targetMode, x, y, width, 20);
+    }
+
+    private void addModeButton(EditMode targetMode, int x, int y, int width, int height) {
         addRenderableWidget(Button.builder(modeText(targetMode), button -> {
             mode = targetMode;
             rebuildWidgets();
-        }).bounds(x, y, PANEL_WIDTH, 20).build());
+        }).bounds(x, y, width, height).build());
     }
 
     private void addSizeButton(String label, int x, int y, boolean width, int delta) {
+        addSizeButton(label, x, y, width, delta, 80);
+    }
+
+    private void addSizeButton(String label, int x, int y, boolean width, int delta, int buttonWidth) {
+        addSizeButton(label, x, y, width, delta, buttonWidth, 20);
+    }
+
+    private void addSizeButton(String label, int x, int y, boolean width, int delta, int buttonWidth, int buttonHeight) {
         addRenderableWidget(Button.builder(Component.literal(label + " " + (delta < 0 ? "-" : "+")), button -> {
             ReactionsClientConfig config = ReactionsClientConfig.get();
             if (width) {
@@ -132,7 +229,7 @@ public final class ReactionsConfigScreen extends Screen {
             }
             ReactionsClientConfig.save();
             rebuildWidgets();
-        }).bounds(x, y, 80, 20).build());
+        }).bounds(x, y, buttonWidth, buttonHeight).build());
     }
 
     @Override
@@ -148,16 +245,18 @@ public final class ReactionsConfigScreen extends Screen {
         drawEyeSelection(graphics, config.rightEyeX, config.rightEyeY, config.eyeWidth, config.eyeHeight, 0xFF4AA3FF);
         drawPixelMarker(graphics, config.eyelidColorX, config.eyelidColorY, 0xFFFFC94A);
 
-        int labelY = faceY + faceSize + 8;
-        graphics.drawString(this.font, Component.literal("Click the face to set " + mode.label), faceX, labelY, 0xFFFFFFFF);
-        graphics.drawString(this.font, Component.literal("Eyes: " + config.eyeWidth + "x" + config.eyeHeight), faceX, labelY + 12, 0xFFBFC7D5);
-        graphics.drawString(this.font, Component.literal("Eyelid color: " + config.eyelidColorX + ", " + config.eyelidColorY), faceX, labelY + 24, 0xFFBFC7D5);
-        if (sizeLimitMessageTicks > 0) {
-            graphics.drawString(this.font, Component.literal("Cannot make eyes bigger"), faceX, labelY + 36, 0xFFFF4040);
-        }
+        if (!compactLayout) {
+            int labelY = faceY + faceSize + 8;
+            graphics.drawString(this.font, Component.literal("Click the face to set " + mode.label), faceX, labelY, 0xFFFFFFFF);
+            graphics.drawString(this.font, Component.literal("Eyes: " + config.eyeWidth + "x" + config.eyeHeight), faceX, labelY + 12, 0xFFBFC7D5);
+            graphics.drawString(this.font, Component.literal("Eyelid color: " + config.eyelidColorX + ", " + config.eyelidColorY), faceX, labelY + 24, 0xFFBFC7D5);
+            if (sizeLimitMessageTicks > 0) {
+                graphics.drawString(this.font, Component.literal("Cannot make eyes bigger"), faceX, labelY + 36, 0xFFFF4040);
+            }
 
-        int panelX = this.width < BASE_FACE_SIZE + 24 + PANEL_WIDTH + 24 ? Math.max(12, this.width / 2 - PANEL_WIDTH / 2) : faceX + faceSize + 24;
-        graphics.drawString(this.font, Component.literal("Eye size"), panelX, eyeSizeHeaderY, 0xFFBFC7D5);
+            int panelX = this.width < BASE_FACE_SIZE + 24 + PANEL_WIDTH + 24 ? Math.max(12, this.width / 2 - PANEL_WIDTH / 2) : faceX + faceSize + 24;
+            graphics.drawString(this.font, Component.literal("Eye size"), panelX, eyeSizeHeaderY, 0xFFBFC7D5);
+        }
     }
 
     @Override

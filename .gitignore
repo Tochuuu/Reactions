@@ -7,6 +7,13 @@
 /fabric/.gradle/
 /fabric/build/
 /fabric/build/classes/java/main/
+/fabric/run/
+/fabric-server-relay/.gradle/
+/fabric-server-relay/build/
+/fabric-server-relay/run/
 /neoforge/.gradle/
 /neoforge/build/
 /neoforge/build/classes/java/main/
+/neoforge/run/
+/paper-plugin/build/
+/.idea/shelf/

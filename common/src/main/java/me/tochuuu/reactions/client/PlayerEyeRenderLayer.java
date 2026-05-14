@@ -14,11 +14,13 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
-public final class PlayerEyeRenderLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
+@SuppressWarnings({"rawtypes", "unchecked"})
+public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final float SKIN_SIZE = 64.0F;
     private static final float HEAD_FRONT_U = 8.0F;
     private static final float HEAD_FRONT_V = 8.0F;
@@ -39,7 +41,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AbstractClientPlayer
     }
 
     @Override
-    public void render(PoseStack poseStack, MultiBufferSource bufferSource, int light, AbstractClientPlayer player, float limbSwing, float limbSwingAmount, float partialTick, float ageInTicks, float netHeadYaw, float headPitch) {
+    public void render(PoseStack poseStack, MultiBufferSource bufferSource, int light, Entity entity, float limbSwing, float limbSwingAmount, float partialTick, float ageInTicks, float netHeadYaw, float headPitch) {
+        if (!(entity instanceof AbstractClientPlayer player)) {
+            return;
+        }
+
         ReactionsClientConfig config = ReactionsClientConfig.get();
         if (!config.enabled || player.isInvisible()) {
             return;
@@ -71,7 +77,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AbstractClientPlayer
         EyeExpression rightEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, bowSquint);
 
         poseStack.pushPose();
-        getParentModel().head.translateAndRotate(poseStack);
+        ((PlayerModel<AbstractClientPlayer>) getParentModel()).head.translateAndRotate(poseStack);
         VertexConsumer consumer = bufferSource.getBuffer(renderType);
         int overlay = LivingEntityRenderer.getOverlayCoords(player, 0.0F);
         submitEye(poseStack, consumer, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1);

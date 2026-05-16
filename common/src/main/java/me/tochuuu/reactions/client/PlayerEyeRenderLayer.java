@@ -77,7 +77,9 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
         submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1);
         submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1);
-        if (eyes.mouthEnabled || config.showMouth) {
+        if (isSelf && AdvancementMouthReaction.active()) {
+            submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
+        } else if (eyes.mouthEnabled || config.showMouth) {
             submitMouth(poseStack, collector, renderType, light, overlay, eyes);
         }
         poseStack.popPose();
@@ -179,6 +181,32 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float dstY1 = eyes.leftMouthY - HEAD_FRONT_V - 8.0F;
         submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, dstX1, dstY1, dstX1 + 1.0F, dstY1 + 1.0F);
         submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, dstX1 + 1.0F, dstY1, dstX1 + 2.0F, dstY1 + 1.0F);
+    }
+
+    private static void submitAdvancementMouth(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes) {
+        float coverX = eyes.leftMouthX - HEAD_FRONT_U - 4.0F;
+        float coverY = eyes.leftMouthY - HEAD_FRONT_V - 8.0F;
+        submitMouthCover(poseStack, collector, renderType, light, overlay, eyes, coverX, coverY, 2.0F, 1.0F);
+
+        float centerX = ((eyes.leftMouthX + 0.5F) + (eyes.rightMouthX + 0.5F)) * 0.5F;
+        float centerY = ((eyes.leftMouthY + 0.5F) + (eyes.rightMouthY + 0.5F)) * 0.5F;
+        float width = 1.25F;
+        float height = 1.0F;
+        float dstX1 = centerX - HEAD_FRONT_U - 4.0F - width * 0.5F;
+        float dstY1 = centerY - HEAD_FRONT_V - 8.0F - height * 0.5F;
+        float splitX = dstX1 + width * 0.5F;
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, dstX1, dstY1, splitX, dstY1 + height);
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, splitX, dstY1, dstX1 + width, dstY1 + height);
+    }
+
+    private static void submitMouthCover(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes, float dstX1, float dstY1, float width, float height) {
+        int sourceX = clamp(eyes.leftMouthX - 1, 0, (int) SKIN_SIZE - 1);
+        int sourceY = clamp(eyes.leftMouthY, 0, (int) SKIN_SIZE - 1);
+        float u1 = sourceX / SKIN_SIZE;
+        float v1 = sourceY / SKIN_SIZE;
+        float u2 = (sourceX + 1) / SKIN_SIZE;
+        float v2 = (sourceY + 1) / SKIN_SIZE;
+        collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> mouthQuad(vertexConsumer, pose, dstX1, dstY1, dstX1 + width, dstY1 + height, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
     }
 
     private static void submitMouthPixel(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, float dstX1, float dstY1, float dstX2, float dstY2) {

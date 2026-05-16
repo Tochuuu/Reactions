@@ -115,11 +115,11 @@ public final class ReactionsConfigScreen extends Screen {
 
         y += 32;
         eyeSizeHeaderY = y - 12;
-        addSizeButton("Width", panelX, y, true, -1);
-        addSizeButton("Width", panelX + 88, y, true, 1);
+        addSizeButton(panelX, y, true, -1);
+        addSizeButton(panelX + 88, y, true, 1);
         y += 24;
-        addSizeButton("Height", panelX, y, false, -1);
-        addSizeButton("Height", panelX + 88, y, false, 1);
+        addSizeButton(panelX, y, false, -1);
+        addSizeButton(panelX + 88, y, false, 1);
 
         int buttonY = Math.min(Math.max(y + 32, this.height - 30), this.height - 24);
         addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
@@ -189,12 +189,12 @@ public final class ReactionsConfigScreen extends Screen {
         }).bounds(rightX, y, buttonWidth, buttonHeight).build());
 
         y += rowStep;
-        addSizeButton("Width", leftX, y, true, -1, buttonWidth, buttonHeight);
-        addSizeButton("Width", rightX, y, true, 1, buttonWidth, buttonHeight);
+        addSizeButton(leftX, y, true, -1, buttonWidth, buttonHeight);
+        addSizeButton(rightX, y, true, 1, buttonWidth, buttonHeight);
 
         y += rowStep;
-        addSizeButton("Height", leftX, y, false, -1, buttonWidth, buttonHeight);
-        addSizeButton("Height", rightX, y, false, 1, buttonWidth, buttonHeight);
+        addSizeButton(leftX, y, false, -1, buttonWidth, buttonHeight);
+        addSizeButton(rightX, y, false, 1, buttonWidth, buttonHeight);
 
         y += rowStep;
           addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
@@ -225,16 +225,16 @@ public final class ReactionsConfigScreen extends Screen {
         }).bounds(x, y, width, height).build());
     }
 
-    private void addSizeButton(String label, int x, int y, boolean width, int delta) {
-        addSizeButton(label, x, y, width, delta, 80);
+    private void addSizeButton(int x, int y, boolean width, int delta) {
+        addSizeButton(x, y, width, delta, 80);
     }
 
-    private void addSizeButton(String label, int x, int y, boolean width, int delta, int buttonWidth) {
-        addSizeButton(label, x, y, width, delta, buttonWidth, 20);
+    private void addSizeButton(int x, int y, boolean width, int delta, int buttonWidth) {
+        addSizeButton(x, y, width, delta, buttonWidth, 20);
     }
 
-    private void addSizeButton(String label, int x, int y, boolean width, int delta, int buttonWidth, int buttonHeight) {
-        addRenderableWidget(Button.builder(Component.literal(label + " " + (delta < 0 ? "-" : "+")), button -> {
+    private void addSizeButton(int x, int y, boolean width, int delta, int buttonWidth, int buttonHeight) {
+        addRenderableWidget(Button.builder(Component.literal(delta < 0 ? "-" : "+"), button -> {
             ReactionsClientConfig config = ReactionsClientConfig.get();
             if (width) {
                 if (delta > 0 && config.eyeWidth >= MAX_EYE_WIDTH) {
@@ -280,6 +280,8 @@ public final class ReactionsConfigScreen extends Screen {
 
             int panelX = this.width < BASE_FACE_SIZE + 24 + PANEL_WIDTH + 24 ? Math.max(12, this.width / 2 - PANEL_WIDTH / 2) : faceX + faceSize + 24;
             graphics.drawString(this.font, Component.literal("Eye size"), panelX, eyeSizeHeaderY, 0xFFBFC7D5);
+            graphics.drawString(this.font, Component.literal("Width"), panelX, eyeSizeHeaderY + 14, 0xFFBFC7D5);
+            graphics.drawString(this.font, Component.literal("Height"), panelX, eyeSizeHeaderY + 38, 0xFFBFC7D5);
         }
     }
 

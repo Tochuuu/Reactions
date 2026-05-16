@@ -234,6 +234,7 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     private void addSizeButton(int x, int y, boolean width, int delta, int buttonWidth, int buttonHeight) {
+        int size = buttonHeight;
         addRenderableWidget(Button.builder(Component.literal(delta < 0 ? "-" : "+"), button -> {
             ReactionsClientConfig config = ReactionsClientConfig.get();
             if (width) {
@@ -251,7 +252,7 @@ public final class ReactionsConfigScreen extends Screen {
             }
             ReactionsClientConfig.save();
             rebuildWidgets();
-        }).bounds(x, y, buttonWidth, buttonHeight).build());
+        }).bounds(x, y, size, size).build());
     }
 
     @Override

@@ -24,7 +24,7 @@ public final class ReactionsClientConfig {
     public boolean animateSelf = true;
     public boolean animateOthers = true;
     public boolean animateBowShooting = false;
-    public boolean showMouth = false;
+    public boolean showMouth = true;
     public int leftEyeX = 9;
     public int leftEyeY = 12;
     public int rightEyeX = 13;
@@ -157,7 +157,7 @@ public final class ReactionsClientConfig {
         public int leftEyeY = 12;
         public int rightEyeX = 13;
         public int rightEyeY = 12;
-        public boolean showMouth = false;
+        public boolean showMouth = true;
         public int leftMouthX = 11;
         public int leftMouthY = 14;
         public int rightMouthX = 12;

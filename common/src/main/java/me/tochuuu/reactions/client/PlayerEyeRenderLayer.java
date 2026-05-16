@@ -82,7 +82,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         int overlay = LivingEntityRenderer.getOverlayCoords(player, 0.0F);
         submitEye(poseStack, consumer, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1);
         submitEye(poseStack, consumer, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1);
-        if (eyes.mouthEnabled) {
+        if (eyes.mouthEnabled || config.showMouth) {
             submitMouth(poseStack, consumer, light, overlay, eyes);
         }
         poseStack.popPose();

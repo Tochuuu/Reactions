@@ -113,11 +113,11 @@ public final class ReactionsConfigScreen extends Screen {
 
         y += 32;
         eyeSizeHeaderY = y - 12;
-        addSizeButton(panelX, y, true, -1);
-        addSizeButton(panelX + 88, y, true, 1);
+        addSizeButton(panelX + 104, y, true, -1);
+        addSizeButton(panelX + 132, y, true, 1);
         y += 24;
-        addSizeButton(panelX, y, false, -1);
-        addSizeButton(panelX + 88, y, false, 1);
+        addSizeButton(panelX + 104, y, false, -1);
+        addSizeButton(panelX + 132, y, false, 1);
 
         int buttonY = Math.min(Math.max(y + 32, this.height - 30), this.height - 24);
         addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {

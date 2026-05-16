@@ -8,9 +8,7 @@ modId = "reactions"
 version = "${version}"
 displayName = "Reactions"
 authors = "Tochuuu"
-description = '''
-
-'''
+description = '''A mod that adds dynamic expressions and facial personality to players.'''
 #logoFile = ""
 displayTest = "IGNORE_ALL_VERSION"
 

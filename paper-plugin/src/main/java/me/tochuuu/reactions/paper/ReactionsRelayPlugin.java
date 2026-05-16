@@ -21,7 +21,8 @@ public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMess
     private static final String S2C_CHANNEL = "reactions:eye_config_s2c";
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
-    private static final int EYE_VALUE_COUNT = 8;
+    private static final int LEGACY_CONFIG_VALUE_COUNT = 8;
+    private static final int CONFIG_VALUE_COUNT = 13;
     private final Map<UUID, EyeConfig> configs = new HashMap<>();
 
     @Override
@@ -87,21 +88,22 @@ public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMess
     }
 
     private static EyeConfig readClientConfig(Player player, byte[] message) {
-        if (message.length < 16 + 1 + EYE_VALUE_COUNT) {
+        if (message.length < 16 + 1 + LEGACY_CONFIG_VALUE_COUNT) {
             return null;
         }
 
         int[] index = {16};
         int ignoredEntityId = readVarInt(message, index);
-        if (ignoredEntityId < 0 || index[0] + EYE_VALUE_COUNT > message.length) {
+        if (ignoredEntityId < 0 || index[0] + LEGACY_CONFIG_VALUE_COUNT > message.length) {
             return null;
         }
 
-        return new EyeConfig(player.getUniqueId(), player.getEntityId(), Arrays.copyOfRange(message, index[0], index[0] + EYE_VALUE_COUNT));
+        int valueCount = index[0] + CONFIG_VALUE_COUNT <= message.length ? CONFIG_VALUE_COUNT : LEGACY_CONFIG_VALUE_COUNT;
+        return new EyeConfig(player.getUniqueId(), player.getEntityId(), Arrays.copyOfRange(message, index[0], index[0] + valueCount));
     }
 
     private static byte[] writeUpdate(EyeConfig config) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(1 + 16 + 5 + EYE_VALUE_COUNT);
+        ByteArrayOutputStream out = new ByteArrayOutputStream(1 + 16 + 5 + config.values().length);
         out.write(UPDATE);
         writeUuid(out, config.playerId());
         writeVarInt(out, config.entityId());

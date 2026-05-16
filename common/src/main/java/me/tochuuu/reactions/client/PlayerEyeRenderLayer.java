@@ -24,6 +24,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final float HEAD_FRONT_U = 8.0F;
     private static final float HEAD_FRONT_V = 8.0F;
     private static final float HEAD_FACE_Z = -4.004F / 16.0F;
+    private static final float MOUTH_FACE_Z = -4.008F / 16.0F;
     private static final int NORMAL_COLOR = 0xFFFFFFFF;
     private static final int EYELID_DARKEN_COLOR = 0xFFB0B0B0;
     private static final int IDLE_LOOK_DELAY_TICKS = 240;
@@ -32,7 +33,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final int IDLE_LOOK_CYCLE_TICKS = IDLE_LOOK_DELAY_TICKS + IDLE_LOOK_ANIMATION_TICKS;
     private static final float BOW_FULL_CHARGE_TICKS = 20.0F;
     private static final float SQUINT_VISIBLE_EYE_COVERAGE = 0.5F;
-    private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, 10, 11, 2, 1);
+    private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, 11, 14, 12, 14, 10, 11, 2, 1);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
 
     public PlayerEyeRenderLayer(RenderLayerParent<AvatarRenderState, PlayerModel> parent) {
@@ -76,6 +77,9 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
         submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1);
         submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1);
+        if (eyes.mouthEnabled) {
+            submitMouth(poseStack, collector, renderType, light, overlay, eyes);
+        }
         poseStack.popPose();
     }
 
@@ -129,17 +133,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color));
     }
 
-    private record EyeSettings(int leftEyeX, int leftEyeY, int rightEyeX, int rightEyeY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight) {
+    private record EyeSettings(int leftEyeX, int leftEyeY, int rightEyeX, int rightEyeY, boolean mouthEnabled, int leftMouthX, int leftMouthY, int rightMouthX, int rightMouthY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight) {
         private static EyeSettings local(ReactionsClientConfig config) {
-            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight);
+            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.showMouth, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight);
         }
 
         private static EyeSettings remote(RemoteEyeConfig config) {
-            return new EyeSettings(config.leftEyeX(), config.leftEyeY(), config.rightEyeX(), config.rightEyeY(), config.eyelidColorX(), config.eyelidColorY(), config.eyeWidth(), config.eyeHeight());
+            return new EyeSettings(config.leftEyeX(), config.leftEyeY(), config.rightEyeX(), config.rightEyeY(), config.mouthEnabled(), config.leftMouthX(), config.leftMouthY(), config.rightMouthX(), config.rightMouthY(), config.eyelidColorX(), config.eyelidColorY(), config.eyeWidth(), config.eyeHeight());
         }
 
         private static EyeSettings override(ReactionsClientConfig.PlayerOverride config) {
-            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight);
+            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.showMouth, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight);
         }
 
         private static EyeSettings defaults() {
@@ -163,6 +167,39 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
 
     private static void vertex(VertexConsumer consumer, PoseStack.Pose pose, float x, float y, float u, float v, int light, int overlay, int color) {
         consumer.addVertex(pose, x / 16.0F, y / 16.0F, HEAD_FACE_Z)
+            .setColor(color)
+            .setUv(u, v)
+            .setOverlay(overlay)
+            .setLight(light)
+            .setNormal(pose, 0.0F, 0.0F, -1.0F);
+    }
+
+    private static void submitMouth(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes) {
+        float dstX1 = eyes.leftMouthX - HEAD_FRONT_U - 4.0F;
+        float dstY1 = eyes.leftMouthY - HEAD_FRONT_V - 8.0F;
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, dstX1, dstY1, dstX1 + 1.0F, dstY1 + 1.0F);
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, dstX1 + 1.0F, dstY1, dstX1 + 2.0F, dstY1 + 1.0F);
+    }
+
+    private static void submitMouthPixel(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, float dstX1, float dstY1, float dstX2, float dstY2) {
+        int sourceX = clamp(skinX, 0, (int) SKIN_SIZE - 1);
+        int sourceY = clamp(skinY, 0, (int) SKIN_SIZE - 1);
+        float u1 = sourceX / SKIN_SIZE;
+        float v1 = sourceY / SKIN_SIZE;
+        float u2 = (sourceX + 1) / SKIN_SIZE;
+        float v2 = (sourceY + 1) / SKIN_SIZE;
+        collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> mouthQuad(vertexConsumer, pose, dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
+    }
+
+    private static void mouthQuad(VertexConsumer consumer, PoseStack.Pose pose, float x1, float y1, float x2, float y2, float u1, float v1, float u2, float v2, int light, int overlay, int color) {
+        mouthVertex(consumer, pose, x1, y2, u1, v2, light, overlay, color);
+        mouthVertex(consumer, pose, x2, y2, u2, v2, light, overlay, color);
+        mouthVertex(consumer, pose, x2, y1, u2, v1, light, overlay, color);
+        mouthVertex(consumer, pose, x1, y1, u1, v1, light, overlay, color);
+    }
+
+    private static void mouthVertex(VertexConsumer consumer, PoseStack.Pose pose, float x, float y, float u, float v, int light, int overlay, int color) {
+        consumer.addVertex(pose, x / 16.0F, y / 16.0F, MOUTH_FACE_Z)
             .setColor(color)
             .setUv(u, v)
             .setOverlay(overlay)

@@ -22,6 +22,8 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     private static final Identifier EYE_CONFIG_S2C = Identifier.fromNamespaceAndPath("reactions", "eye_config_s2c");
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
+    private static final int LEGACY_CONFIG_VALUE_COUNT = 8;
+    private static final int CONFIG_VALUE_COUNT = 13;
     private static final int SERVER_SYNC_RETRY_TICKS = 20 * 30;
     private static final Map<UUID, EyeConfig> CONFIGS = new HashMap<>();
     private static final Map<UUID, Integer> PENDING_SYNC = new HashMap<>();
@@ -66,22 +68,33 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
 
             entry.setValue(entry.getValue() - 10);
             if (canSend(player)) {
-                sendKnownConfigs(player);
-                iterator.remove();
+                if (sendKnownConfigs(player)) {
+                    iterator.remove();
+                }
             }
         }
     }
 
-    private static void sendKnownConfigs(ServerPlayer player) {
+    private static boolean sendKnownConfigs(ServerPlayer player) {
         if (!canSend(player)) {
-            return;
+            PENDING_SYNC.put(player.getUUID(), SERVER_SYNC_RETRY_TICKS);
+            return false;
         }
-        CONFIGS.values().forEach(config -> send(player, EyeConfigS2CPayload.update(config)));
+        boolean sentAll = true;
+        for (EyeConfig config : CONFIGS.values()) {
+            sentAll &= send(player, EyeConfigS2CPayload.update(config));
+        }
+        if (!sentAll) {
+            PENDING_SYNC.put(player.getUUID(), SERVER_SYNC_RETRY_TICKS);
+        }
+        return sentAll;
     }
 
     private static void broadcast(MinecraftServer server, EyeConfigS2CPayload payload) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            send(player, payload);
+            if (!send(player, payload)) {
+                PENDING_SYNC.put(player.getUUID(), SERVER_SYNC_RETRY_TICKS);
+            }
         }
     }
 
@@ -89,9 +102,15 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         return ServerPlayNetworking.canSend(player, EyeConfigS2CPayload.TYPE);
     }
 
-    private static void send(ServerPlayer player, EyeConfigS2CPayload payload) {
-        if (canSend(player)) {
+    private static boolean send(ServerPlayer player, EyeConfigS2CPayload payload) {
+        if (!canSend(player)) {
+            return false;
+        }
+        try {
             ServerPlayNetworking.send(player, payload);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
         }
     }
 
@@ -106,7 +125,8 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     private static EyeConfig readConfig(RegistryFriendlyByteBuf buf) {
         UUID playerId = buf.readUUID();
         int entityId = buf.readVarInt();
-        int[] values = new int[8];
+        int valueCount = buf.readableBytes() >= CONFIG_VALUE_COUNT ? CONFIG_VALUE_COUNT : LEGACY_CONFIG_VALUE_COUNT;
+        int[] values = new int[valueCount];
         for (int i = 0; i < values.length; i++) {
             values[i] = buf.readUnsignedByte();
         }

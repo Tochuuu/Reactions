@@ -101,12 +101,14 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
     @Override
     public boolean canSendToServer() {
         ClientPacketListener connection = Minecraft.getInstance().getConnection();
-        return connection instanceof ICommonPacketListener listener && listener.hasChannel(ReactionsNetworking.EyeConfigC2SPayload.TYPE);
+        return connection instanceof ICommonPacketListener listener
+            && (listener.hasChannel(ReactionsNetworking.EyeConfigC2SPayload.TYPE) || listener.getConnectionType().isOther());
     }
 
     @Override
     public boolean canSendToPlayer(ServerPlayer player) {
-        return player.connection instanceof ICommonPacketListener listener && listener.hasChannel(ReactionsNetworking.EyeConfigS2CPayload.TYPE);
+        return player.connection instanceof ICommonPacketListener listener
+            && (listener.hasChannel(ReactionsNetworking.EyeConfigS2CPayload.TYPE) || listener.getConnectionType().isOther());
     }
 
     @Override

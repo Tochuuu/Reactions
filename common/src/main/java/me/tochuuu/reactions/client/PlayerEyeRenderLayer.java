@@ -25,7 +25,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final float HEAD_FRONT_V = 8.0F;
     private static final float HEAD_FACE_Z = -4.004F / 16.0F;
     private static final float MOUTH_FACE_Z = -4.008F / 16.0F;
-    private static final float MOUTH_UV_INSET = 0.01F;
+    private static final float MOUTH_UV_INSET = 0.125F;
     private static final int NORMAL_COLOR = 0xFFFFFFFF;
     private static final int EYELID_DARKEN_COLOR = 0xFFB0B0B0;
     private static final int IDLE_LOOK_DELAY_TICKS = 240;
@@ -205,7 +205,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float width = 1.25F;
         float height = 1.25F;
         float dstX1 = centerX - HEAD_FRONT_U - 4.0F - width * 0.5F;
-        float dstY1 = centerY - HEAD_FRONT_V - 8.0F - height * 0.5F;
+        float dstY1 = centerY - HEAD_FRONT_V - 8.0F - 0.5F;
         float splitX = dstX1 + width * 0.5F;
         submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, 1.25F, dstX1, dstY1, splitX, dstY1 + height);
         submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, 1.25F, splitX, dstY1, dstX1 + width, dstY1 + height);
@@ -214,10 +214,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static void submitMouthCover(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes, float dstX1, float dstY1, float width, float height) {
         int sourceX = clamp(eyes.leftMouthX - 1, 0, (int) SKIN_SIZE - 1);
         int sourceY = clamp(eyes.leftMouthY, 0, (int) SKIN_SIZE - 1);
-        float u1 = sourceX / SKIN_SIZE;
-        float v1 = sourceY / SKIN_SIZE;
-        float u2 = (sourceX + 1) / SKIN_SIZE;
-        float v2 = (sourceY + 1) / SKIN_SIZE;
+        float u1 = (sourceX + MOUTH_UV_INSET) / SKIN_SIZE;
+        float v1 = (sourceY + MOUTH_UV_INSET) / SKIN_SIZE;
+        float u2 = (sourceX + 1.0F - MOUTH_UV_INSET) / SKIN_SIZE;
+        float v2 = (sourceY + 1.0F - MOUTH_UV_INSET) / SKIN_SIZE;
         collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> mouthQuad(vertexConsumer, pose, dstX1, dstY1, dstX1 + width, dstY1 + height, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
     }
 

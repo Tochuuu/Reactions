@@ -55,6 +55,9 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
             : null;
         boolean useDefaultOfflineEyes = !isSelf && remoteConfig == null && playerOverride == null && !canSyncWithServer && isDefaultPlayerSkin(texture);
         if (!isSelf && remoteConfig == null && !useDefaultOfflineEyes && (playerOverride == null || !playerOverride.enabled)) {
+            if (config.showMouth) {
+                renderMouthOnly(poseStack, bufferSource, light, state, renderType(texture), EyeSettings.local(config));
+            }
             return;
         }
         EyeSettings eyes = isSelf ? EyeSettings.local(config) : remoteConfig != null ? EyeSettings.remote(remoteConfig) : useDefaultOfflineEyes ? EyeSettings.defaults() : EyeSettings.override(playerOverride);
@@ -80,6 +83,14 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         } else if (eyes.mouthEnabled || config.showMouth) {
             submitMouth(poseStack, bufferSource, renderType, light, overlay, eyes);
         }
+        poseStack.popPose();
+    }
+
+    private void renderMouthOnly(PoseStack poseStack, MultiBufferSource bufferSource, int light, PlayerRenderState state, RenderType renderType, EyeSettings eyes) {
+        poseStack.pushPose();
+        getParentModel().head.translateAndRotate(poseStack);
+        int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
+        submitMouth(poseStack, bufferSource, renderType, light, overlay, eyes);
         poseStack.popPose();
     }
 

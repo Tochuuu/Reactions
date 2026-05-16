@@ -24,10 +24,15 @@ public final class ReactionsClientConfig {
     public boolean animateSelf = true;
     public boolean animateOthers = true;
     public boolean animateBowShooting = false;
+    public boolean showMouth = false;
     public int leftEyeX = 9;
     public int leftEyeY = 12;
     public int rightEyeX = 13;
     public int rightEyeY = 12;
+    public int leftMouthX = 11;
+    public int leftMouthY = 14;
+    public int rightMouthX = 12;
+    public int rightMouthY = 14;
     public int eyelidColorX = 10;
     public int eyelidColorY = 11;
     public int eyeWidth = 2;
@@ -126,6 +131,10 @@ public final class ReactionsClientConfig {
         leftEyeY = clamp(leftEyeY, 8, 16 - eyeHeight);
         rightEyeX = clamp(rightEyeX, 8, 16 - eyeWidth);
         rightEyeY = clamp(rightEyeY, 8, 16 - eyeHeight);
+        leftMouthX = clamp(leftMouthX, 8, 15);
+        leftMouthY = clamp(leftMouthY, 8, 15);
+        rightMouthX = clamp(rightMouthX, 8, 15);
+        rightMouthY = clamp(rightMouthY, 8, 15);
         eyelidColorX = clamp(eyelidColorX, 0, 63);
         eyelidColorY = clamp(eyelidColorY, 0, 63);
         movementPixels = clamp(movementPixels, 0, 4);
@@ -148,6 +157,11 @@ public final class ReactionsClientConfig {
         public int leftEyeY = 12;
         public int rightEyeX = 13;
         public int rightEyeY = 12;
+        public boolean showMouth = false;
+        public int leftMouthX = 11;
+        public int leftMouthY = 14;
+        public int rightMouthX = 12;
+        public int rightMouthY = 14;
         public int eyelidColorX = 10;
         public int eyelidColorY = 11;
         public int eyeWidth = 2;
@@ -159,6 +173,11 @@ public final class ReactionsClientConfig {
             override.leftEyeY = config.leftEyeY;
             override.rightEyeX = config.rightEyeX;
             override.rightEyeY = config.rightEyeY;
+            override.showMouth = config.showMouth;
+            override.leftMouthX = config.leftMouthX;
+            override.leftMouthY = config.leftMouthY;
+            override.rightMouthX = config.rightMouthX;
+            override.rightMouthY = config.rightMouthY;
             override.eyelidColorX = config.eyelidColorX;
             override.eyelidColorY = config.eyelidColorY;
             override.eyeWidth = config.eyeWidth;
@@ -173,6 +192,10 @@ public final class ReactionsClientConfig {
             leftEyeY = ReactionsClientConfig.clamp(leftEyeY, 8, 16 - eyeHeight);
             rightEyeX = ReactionsClientConfig.clamp(rightEyeX, 8, 16 - eyeWidth);
             rightEyeY = ReactionsClientConfig.clamp(rightEyeY, 8, 16 - eyeHeight);
+            leftMouthX = ReactionsClientConfig.clamp(leftMouthX, 8, 15);
+            leftMouthY = ReactionsClientConfig.clamp(leftMouthY, 8, 15);
+            rightMouthX = ReactionsClientConfig.clamp(rightMouthX, 8, 15);
+            rightMouthY = ReactionsClientConfig.clamp(rightMouthY, 8, 15);
             eyelidColorX = ReactionsClientConfig.clamp(eyelidColorX, 0, 63);
             eyelidColorY = ReactionsClientConfig.clamp(eyelidColorY, 0, 63);
         }

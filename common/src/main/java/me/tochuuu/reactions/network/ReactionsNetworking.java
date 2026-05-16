@@ -221,10 +221,13 @@ public final class ReactionsNetworking {
 
             entry.setValue(entry.getValue() - 10);
             if (canSendToPlayer(player)) {
+                boolean sentAll = true;
                 for (RemoteEyeConfig config : SERVER_CONFIGS.values()) {
-                    sendUpdate(player, config);
+                    sentAll &= trySendUpdate(player, config);
                 }
-                iterator.remove();
+                if (sentAll) {
+                    iterator.remove();
+                }
             }
         }
     }
@@ -232,17 +235,26 @@ public final class ReactionsNetworking {
     private static void sendUpdateToReceivers(ServerPlayer source, RemoteEyeConfig config) {
         for (ServerPlayer player : source.level().getServer().getPlayerList().getPlayers()) {
             if (canSendToPlayer(player)) {
-                sendUpdate(player, config);
+                if (!trySendUpdate(player, config)) {
+                    queueServerSync(player);
+                }
+            } else {
+                queueServerSync(player);
             }
         }
     }
 
     private static void sendKnownConfigs(ServerPlayer player) {
         if (!canSendToPlayer(player)) {
+            queueServerSync(player);
             return;
         }
+        boolean sentAll = true;
         for (RemoteEyeConfig config : SERVER_CONFIGS.values()) {
-            sendUpdate(player, config);
+            sentAll &= trySendUpdate(player, config);
+        }
+        if (!sentAll) {
+            queueServerSync(player);
         }
     }
 
@@ -258,12 +270,24 @@ public final class ReactionsNetworking {
         return platform != null && platform.canSendToPlayer(player);
     }
 
-    private static void sendUpdate(ServerPlayer player, RemoteEyeConfig config) {
-        platform.sendToPlayer(player, EyeConfigS2CPayload.update(config));
+    private static boolean trySendUpdate(ServerPlayer player, RemoteEyeConfig config) {
+        try {
+            platform.sendToPlayer(player, EyeConfigS2CPayload.update(config));
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     private static void sendRemove(ServerPlayer player, UUID playerId) {
-        platform.sendToPlayer(player, EyeConfigS2CPayload.remove(playerId));
+        try {
+            platform.sendToPlayer(player, EyeConfigS2CPayload.remove(playerId));
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private static void queueServerSync(ServerPlayer player) {
+        SERVER_PENDING_SYNC.put(player.getUUID(), SERVER_SYNC_RETRY_TICKS);
     }
 
     private static void writeUpdateBody(RegistryFriendlyByteBuf buf, RemoteEyeConfig config) {
@@ -273,6 +297,11 @@ public final class ReactionsNetworking {
         buf.writeByte(config.leftEyeY());
         buf.writeByte(config.rightEyeX());
         buf.writeByte(config.rightEyeY());
+        buf.writeBoolean(config.mouthEnabled());
+        buf.writeByte(config.leftMouthX());
+        buf.writeByte(config.leftMouthY());
+        buf.writeByte(config.rightMouthX());
+        buf.writeByte(config.rightMouthY());
         buf.writeByte(config.eyelidColorX());
         buf.writeByte(config.eyelidColorY());
         buf.writeByte(config.eyeWidth());
@@ -280,9 +309,40 @@ public final class ReactionsNetworking {
     }
 
     private static RemoteEyeConfig readUpdateBody(RegistryFriendlyByteBuf buf) {
+        UUID playerId = buf.readUUID();
+        int entityId = buf.readVarInt();
+        int leftEyeX = buf.readUnsignedByte();
+        int leftEyeY = buf.readUnsignedByte();
+        int rightEyeX = buf.readUnsignedByte();
+        int rightEyeY = buf.readUnsignedByte();
+        if (buf.readableBytes() <= 4) {
+            return new RemoteEyeConfig(
+                playerId,
+                entityId,
+                leftEyeX,
+                leftEyeY,
+                rightEyeX,
+                rightEyeY,
+                false,
+                11,
+                14,
+                12,
+                14,
+                buf.readUnsignedByte(),
+                buf.readUnsignedByte(),
+                buf.readUnsignedByte(),
+                buf.readUnsignedByte()
+            );
+        }
+
         return new RemoteEyeConfig(
-            buf.readUUID(),
-            buf.readVarInt(),
+            playerId,
+            entityId,
+            leftEyeX,
+            leftEyeY,
+            rightEyeX,
+            rightEyeY,
+            buf.readBoolean(),
             buf.readUnsignedByte(),
             buf.readUnsignedByte(),
             buf.readUnsignedByte(),
@@ -303,6 +363,11 @@ public final class ReactionsNetworking {
             config.leftEyeY,
             config.rightEyeX,
             config.rightEyeY,
+            config.showMouth,
+            config.leftMouthX,
+            config.leftMouthY,
+            config.rightMouthX,
+            config.rightMouthY,
             config.eyelidColorX,
             config.eyelidColorY,
             config.eyeWidth,
@@ -318,6 +383,11 @@ public final class ReactionsNetworking {
             config.leftEyeY(),
             config.rightEyeX(),
             config.rightEyeY(),
+            config.mouthEnabled(),
+            config.leftMouthX(),
+            config.leftMouthY(),
+            config.rightMouthX(),
+            config.rightMouthY(),
             config.eyelidColorX(),
             config.eyelidColorY(),
             config.eyeWidth(),

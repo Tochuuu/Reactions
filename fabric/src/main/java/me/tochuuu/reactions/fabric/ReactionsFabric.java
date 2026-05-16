@@ -12,5 +12,6 @@ public final class ReactionsFabric implements ModInitializer {
 
         // Run our common setup.
         Reactions.init();
+        ReactionsFabricNetworking.init();
     }
 }

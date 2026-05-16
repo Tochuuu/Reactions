@@ -3,7 +3,7 @@
   "id": "reactions",
   "version": "${version}",
   "name": "Reactions",
-  "description": "",
+  "description": "A mod that adds dynamic expressions and facial personality to players.",
   "authors": [
     "Tochuuu"
   ],

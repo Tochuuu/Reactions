@@ -51,12 +51,16 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
         event.registrar("1").optional()
-            .playToServer(ReactionsNetworking.EyeConfigC2SPayload.TYPE, ReactionsNetworking.EyeConfigC2SPayload.STREAM_CODEC, (payload, context) -> {
+            .playBidirectional(ReactionsNetworking.EyeConfigC2SPayload.TYPE, ReactionsNetworking.EyeConfigC2SPayload.STREAM_CODEC, (payload, context) -> {
                 if (context.player() instanceof ServerPlayer serverPlayer) {
                     ReactionsNetworking.handleServerboundConfig(payload, serverPlayer);
                 }
             })
-            .playToClient(ReactionsNetworking.EyeConfigS2CPayload.TYPE, ReactionsNetworking.EyeConfigS2CPayload.STREAM_CODEC, (payload, context) -> ReactionsNetworking.handleClientboundConfig(payload));
+            .playBidirectional(ReactionsNetworking.EyeConfigS2CPayload.TYPE, ReactionsNetworking.EyeConfigS2CPayload.STREAM_CODEC, (payload, context) -> {
+                if (!(context.player() instanceof ServerPlayer)) {
+                    ReactionsNetworking.handleClientboundConfig(payload);
+                }
+            });
     }
 
     private static void registerKeyMappings(RegisterKeyMappingsEvent event) {

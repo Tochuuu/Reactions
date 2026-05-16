@@ -24,8 +24,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final float HEAD_FRONT_U = 8.0F;
     private static final float HEAD_FRONT_V = 8.0F;
     private static final float HEAD_FACE_Z = -4.004F / 16.0F;
-    private static final float MOUTH_FACE_Z = -4.008F / 16.0F;
+    private static final float MOUTH_COVER_FACE_Z = -4.018F / 16.0F;
+    private static final float MOUTH_FACE_Z = -4.026F / 16.0F;
     private static final float MOUTH_UV_INSET = 0.125F;
+    private static final float ADVANCEMENT_MOUTH_TOP_EXTENSION = 0.001F;
     private static final int NORMAL_COLOR = 0xFFFFFFFF;
     private static final int EYELID_DARKEN_COLOR = 0xFFB0B0B0;
     private static final int IDLE_LOOK_DELAY_TICKS = 240;
@@ -205,10 +207,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float width = 1.25F;
         float height = 1.25F;
         float dstX1 = centerX - HEAD_FRONT_U - 4.0F - width * 0.5F;
-        float dstY1 = centerY - HEAD_FRONT_V - 8.0F - 0.5F;
+        float dstY1 = centerY - HEAD_FRONT_V - 8.0F - 0.5F - ADVANCEMENT_MOUTH_TOP_EXTENSION;
         float splitX = dstX1 + width * 0.5F;
-        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, 1.25F, dstX1, dstY1, splitX, dstY1 + height);
-        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, 1.25F, splitX, dstY1, dstX1 + width, dstY1 + height);
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, 1.25F, dstX1, dstY1, splitX, dstY1 + height + ADVANCEMENT_MOUTH_TOP_EXTENSION);
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, 1.25F, splitX, dstY1, dstX1 + width, dstY1 + height + ADVANCEMENT_MOUTH_TOP_EXTENSION);
     }
 
     private static void submitMouthCover(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes, float dstX1, float dstY1, float width, float height) {
@@ -218,7 +220,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float v1 = (sourceY + MOUTH_UV_INSET) / SKIN_SIZE;
         float u2 = (sourceX + 1.0F - MOUTH_UV_INSET) / SKIN_SIZE;
         float v2 = (sourceY + 1.0F - MOUTH_UV_INSET) / SKIN_SIZE;
-        collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> mouthQuad(vertexConsumer, pose, dstX1, dstY1, dstX1 + width, dstY1 + height, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
+        collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> mouthCoverQuad(vertexConsumer, pose, dstX1, dstY1, dstX1 + width, dstY1 + height, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
     }
 
     private static void submitMouthPixel(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, float dstX1, float dstY1, float dstX2, float dstY2) {
@@ -243,8 +245,24 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         mouthVertex(consumer, pose, x1, y1, u1, v1, light, overlay, color);
     }
 
+    private static void mouthCoverQuad(VertexConsumer consumer, PoseStack.Pose pose, float x1, float y1, float x2, float y2, float u1, float v1, float u2, float v2, int light, int overlay, int color) {
+        mouthCoverVertex(consumer, pose, x1, y2, u1, v2, light, overlay, color);
+        mouthCoverVertex(consumer, pose, x2, y2, u2, v2, light, overlay, color);
+        mouthCoverVertex(consumer, pose, x2, y1, u2, v1, light, overlay, color);
+        mouthCoverVertex(consumer, pose, x1, y1, u1, v1, light, overlay, color);
+    }
+
     private static void mouthVertex(VertexConsumer consumer, PoseStack.Pose pose, float x, float y, float u, float v, int light, int overlay, int color) {
         consumer.addVertex(pose, x / 16.0F, y / 16.0F, MOUTH_FACE_Z)
+            .setColor(color)
+            .setUv(u, v)
+            .setOverlay(overlay)
+            .setLight(light)
+            .setNormal(pose, 0.0F, 0.0F, -1.0F);
+    }
+
+    private static void mouthCoverVertex(VertexConsumer consumer, PoseStack.Pose pose, float x, float y, float u, float v, int light, int overlay, int color) {
+        consumer.addVertex(pose, x / 16.0F, y / 16.0F, MOUTH_COVER_FACE_Z)
             .setColor(color)
             .setUv(u, v)
             .setOverlay(overlay)

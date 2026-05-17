@@ -58,7 +58,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         boolean useDefaultOfflineEyes = !isSelf && remoteConfig == null && playerOverride == null && !canSyncWithServer && isDefaultPlayerSkin(texture);
         if (!isSelf && remoteConfig == null && !useDefaultOfflineEyes && (playerOverride == null || !playerOverride.enabled)) {
             if (config.showMouth) {
-                renderMouthOnly(poseStack, bufferSource, light, state, renderType(texture), EyeSettings.local(config));
+                renderMouthOnly(poseStack, bufferSource, light, state, renderType(texture), config.animateOthers, EyeSettings.local(config));
             }
             return;
         }
@@ -80,7 +80,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
         submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1);
         submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1);
-        if (AdvancementMouthReaction.active(state.id)) {
+        if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, bufferSource, renderType, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
             submitMouth(poseStack, bufferSource, renderType, light, overlay, eyes);
@@ -88,11 +88,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         poseStack.popPose();
     }
 
-    private void renderMouthOnly(PoseStack poseStack, MultiBufferSource bufferSource, int light, PlayerRenderState state, RenderType renderType, EyeSettings eyes) {
+    private void renderMouthOnly(PoseStack poseStack, MultiBufferSource bufferSource, int light, PlayerRenderState state, RenderType renderType, boolean animationsEnabled, EyeSettings eyes) {
         poseStack.pushPose();
         getParentModel().head.translateAndRotate(poseStack);
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
-        if (AdvancementMouthReaction.active(state.id)) {
+        if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, bufferSource, renderType, light, overlay, eyes);
         } else {
             submitMouth(poseStack, bufferSource, renderType, light, overlay, eyes);

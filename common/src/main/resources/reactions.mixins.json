@@ -6,6 +6,7 @@
   "client": [
     "AdvancementToastMixin",
     "AvatarRendererMixin",
+    "ClientPacketListenerMixin",
     "LivingEntityRendererAccessor"
   ],
   "mixins": [

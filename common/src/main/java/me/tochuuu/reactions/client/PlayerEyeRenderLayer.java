@@ -88,7 +88,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         int overlay = LivingEntityRenderer.getOverlayCoords(player, 0.0F);
         submitEye(poseStack, consumer, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1);
         submitEye(poseStack, consumer, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1);
-        if (isSelf && AdvancementMouthReaction.active()) {
+        if (AdvancementMouthReaction.active(player.getId())) {
             submitAdvancementMouth(poseStack, consumer, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
             submitMouth(poseStack, consumer, light, overlay, eyes);
@@ -101,7 +101,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         ((PlayerModel<AbstractClientPlayer>) getParentModel()).head.translateAndRotate(poseStack);
         VertexConsumer consumer = bufferSource.getBuffer(renderType);
         int overlay = LivingEntityRenderer.getOverlayCoords(player, 0.0F);
-        submitMouth(poseStack, consumer, light, overlay, eyes);
+        if (AdvancementMouthReaction.active(player.getId())) {
+            submitAdvancementMouth(poseStack, consumer, light, overlay, eyes);
+        } else {
+            submitMouth(poseStack, consumer, light, overlay, eyes);
+        }
         poseStack.popPose();
     }
 

@@ -83,7 +83,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
         submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1);
         submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1);
-        if (isSelf && AdvancementMouthReaction.active()) {
+        if (AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
             submitMouth(poseStack, collector, renderType, light, overlay, eyes);
@@ -95,7 +95,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         poseStack.pushPose();
         getParentModel().head.translateAndRotate(poseStack);
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
-        submitMouth(poseStack, collector, renderType, light, overlay, eyes);
+        if (AdvancementMouthReaction.active(state.id)) {
+            submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
+        } else {
+            submitMouth(poseStack, collector, renderType, light, overlay, eyes);
+        }
         poseStack.popPose();
     }
 

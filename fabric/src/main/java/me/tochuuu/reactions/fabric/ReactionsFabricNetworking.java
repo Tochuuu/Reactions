@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.server.level.ServerPlayer;
 
 public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
@@ -37,7 +38,8 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
 
     @Override
     public boolean canSendToPlayer(ServerPlayer player) {
-        return ServerPlayNetworking.canSend(player, ReactionsNetworking.EyeConfigS2CPayload.TYPE);
+        return ServerPlayNetworking.canSend(player, ReactionsNetworking.EyeConfigS2CPayload.TYPE)
+            || ReactionsNetworking.hasServerConfig(player.getUUID());
     }
 
     @Override
@@ -47,6 +49,11 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
 
     @Override
     public void sendToPlayer(ServerPlayer player, ReactionsNetworking.EyeConfigS2CPayload payload) {
-        ServerPlayNetworking.send(player, payload);
+        if (ServerPlayNetworking.canSend(player, ReactionsNetworking.EyeConfigS2CPayload.TYPE)) {
+            ServerPlayNetworking.send(player, payload);
+            return;
+        }
+
+        player.connection.send(new ClientboundCustomPayloadPacket(payload));
     }
 }

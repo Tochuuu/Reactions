@@ -121,6 +121,10 @@ public final class ReactionsNetworking {
         return remoteConfig(entityId) != null;
     }
 
+    public static boolean hasServerConfig(UUID playerId) {
+        return SERVER_CONFIGS.containsKey(playerId);
+    }
+
     public static void applyRemoteConfig(RemoteEyeConfig config) {
         CLIENT_CONFIGS.put(config.entityId(), config);
         if (config.playerId() != null) {

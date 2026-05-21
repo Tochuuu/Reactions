@@ -14,6 +14,9 @@
   "icon": "icon.png",
   "environment": "client",
   "entrypoints": {
+    "main": [
+      "me.tochuuu.reactions.fabric.ReactionsFabric"
+    ],
     "client": [
       "me.tochuuu.reactions.fabric.client.ReactionsFabricClient"
     ],

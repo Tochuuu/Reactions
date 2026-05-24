@@ -75,6 +75,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         boolean smoothStyle = config.animationStyle == ReactionsClientConfig.AnimationStyle.SMOOTH;
         int mirroredEye = animationsEnabled && !blinking && !smoothStyle ? mirroredIdleEye(state) : 0;
         float idleEyeOffset = animationsEnabled && !blinking && smoothStyle ? smoothIdleEyeOffset(state, config.movementPixels) : 0.0F;
+        float eyelidProgress = smoothStyle && blinking ? blinkProgress(state, config) : 1.0F;
         HumanoidArm spyglassArm = spyglassUseArm(state);
         HumanoidArm bowArm = bowUseArm(state);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(state, bowArm);
@@ -91,8 +92,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         poseStack.pushPose();
         getParentModel().head.translateAndRotate(poseStack);
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
-        submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, idleEyeOffset, EyeSide.LEFT, hurtSclera);
-        submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, idleEyeOffset, EyeSide.RIGHT, hurtSclera);
+        submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, idleEyeOffset, eyelidProgress, EyeSide.LEFT, hurtSclera);
+        submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, idleEyeOffset, eyelidProgress, EyeSide.RIGHT, hurtSclera);
         if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, bufferSource, renderType, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
@@ -113,7 +114,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         poseStack.popPose();
     }
 
-    private static void submitEye(PoseStack poseStack, MultiBufferSource bufferSource, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, float eyeOffset, EyeSide side, boolean hurtSclera) {
+    private static void submitEye(PoseStack poseStack, MultiBufferSource bufferSource, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, float eyeOffset, float eyelidProgress, EyeSide side, boolean hurtSclera) {
         int clampedSkinX = clamp(skinX, 0, (int) SKIN_SIZE - eyeWidth);
         int clampedSkinY = clamp(skinY, 0, (int) SKIN_SIZE - eyeHeight);
         int clampedEyelidSkinX = clamp(eyelidColorX, 0, (int) SKIN_SIZE - 1);
@@ -127,6 +128,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
 
         if (expression == EyeExpression.SQUINT) {
             submitSquintEye(poseStack, bufferSource, renderType, light, overlay, clampedSkinX, clampedSkinY, clampedEyelidSkinX, clampedEyelidSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, mirrored);
+            return;
+        }
+
+        if (expression == EyeExpression.CLOSED && eyelidProgress < 1.0F) {
+            submitSmoothClosedEye(poseStack, bufferSource, renderType, light, overlay, clampedSkinX, clampedSkinY, clampedEyelidSkinX, clampedEyelidSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, mirrored, eyelidProgress);
             return;
         }
 
@@ -336,6 +342,38 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         quad(bufferSource.getBuffer(renderType), poseStack.last(), dstX1, splitY, dstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
     }
 
+    private static void submitSmoothClosedEye(PoseStack poseStack, MultiBufferSource bufferSource, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidX, int eyelidY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, boolean mirrored, float eyelidProgress) {
+        if (mirrored) {
+            for (int column = 0; column < eyeWidth; column++) {
+                int sourceX = skinX + eyeWidth - 1 - column;
+                float columnDstX1 = dstX1 + column;
+                float columnDstX2 = columnDstX1 + 1.0F;
+                float u1 = sourceX / SKIN_SIZE;
+                float v1 = skinY / SKIN_SIZE;
+                float u2 = (sourceX + 1) / SKIN_SIZE;
+                float v2 = (skinY + eyeHeight) / SKIN_SIZE;
+                quad(bufferSource.getBuffer(renderType), poseStack.last(), columnDstX1, dstY1, columnDstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
+            }
+        } else {
+            float u1 = skinX / SKIN_SIZE;
+            float v1 = skinY / SKIN_SIZE;
+            float u2 = (skinX + eyeWidth) / SKIN_SIZE;
+            float v2 = (skinY + eyeHeight) / SKIN_SIZE;
+            quad(bufferSource.getBuffer(renderType), poseStack.last(), dstX1, dstY1, dstX1 + eyeWidth, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
+        }
+
+        float coverHeight = Math.max(0.0F, Math.min(1.0F, eyelidProgress)) * eyeHeight;
+        if (coverHeight <= 0.0F) {
+            return;
+        }
+
+        float eyelidU1 = eyelidX / SKIN_SIZE;
+        float eyelidV1 = eyelidY / SKIN_SIZE;
+        float eyelidU2 = (eyelidX + 1) / SKIN_SIZE;
+        float eyelidV2 = (eyelidY + 1) / SKIN_SIZE;
+        quad(bufferSource.getBuffer(renderType), poseStack.last(), dstX1, dstY1, dstX1 + eyeWidth, dstY1 + coverHeight, eyelidU1, eyelidV1, eyelidU2, eyelidV2, light, overlay, EYELID_DARKEN_COLOR);
+    }
+
     private static boolean shouldExtendSclera(int eyeWidth, int eyeHeight, boolean hurtSclera) {
         return hurtSclera && eyeWidth == 2 && (eyeHeight == 1 || eyeHeight == 2);
     }
@@ -420,12 +458,28 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
     }
 
     private static boolean isBlinking(PlayerRenderState state, ReactionsClientConfig config) {
+        return blinkPhase(state, config) < Math.max(1, config.blinkDurationTicks);
+    }
+
+    private static float blinkProgress(PlayerRenderState state, ReactionsClientConfig config) {
+        int duration = Math.max(1, config.blinkDurationTicks);
+        float phase = blinkPhase(state, config);
+        if (phase >= duration) {
+            return 0.0F;
+        }
+
+        float halfDuration = Math.max(1.0F, duration * 0.5F);
+        float rawProgress = phase <= halfDuration ? phase / halfDuration : (duration - phase) / halfDuration;
+        return smoothStep(Math.max(0.0F, Math.min(1.0F, rawProgress)));
+    }
+
+    private static float blinkPhase(PlayerRenderState state, ReactionsClientConfig config) {
         int baseInterval = Math.max(20, config.blinkIntervalTicks);
         int randomWindow = Math.max(20, baseInterval / 2);
         int blinkIndex = Math.max(0, (int) state.ageInTicks / baseInterval);
         int interval = baseInterval + seededOffset(state.id, blinkIndex, randomWindow);
-        int phase = Math.floorMod((int) state.ageInTicks + seededOffset(state.id, blinkIndex + 31, randomWindow), interval);
-        return phase < config.blinkDurationTicks;
+        float phase = (state.ageInTicks + seededOffset(state.id, blinkIndex + 31, randomWindow)) % interval;
+        return phase < 0.0F ? phase + interval : phase;
     }
 
     private static HumanoidArm spyglassUseArm(PlayerRenderState state) {
@@ -511,6 +565,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
     private static float smoothPulse(int phase) {
         float progress = Math.max(0.0F, Math.min(1.0F, phase / (float) IDLE_LOOK_STEP_TICKS));
         return (float) Math.sin(progress * Math.PI);
+    }
+
+    private static float smoothStep(float progress) {
+        return progress * progress * (3.0F - 2.0F * progress);
     }
 
     private static RenderType renderType(ResourceLocation texture) {

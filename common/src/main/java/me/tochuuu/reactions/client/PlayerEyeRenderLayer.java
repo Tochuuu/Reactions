@@ -39,6 +39,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final float HURT_SCLERA_EXTENSION = 0.5F;
     private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, 11, 14, 12, 14, 10, 11, 2, 1);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, DamageEyeReaction> DAMAGE_REACTIONS = new java.util.HashMap<>();
 
     public PlayerEyeRenderLayer(RenderLayerParent<AvatarRenderState, PlayerModel> parent) {
         super(parent);
@@ -76,15 +77,21 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         HumanoidArm spyglassArm = spyglassUseArm(state);
         HumanoidArm bowArm = bowUseArm(state);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(state, bowArm);
-        boolean hurtSclera = animationsEnabled && state.hasRedOverlay;
+        DamageEyeReaction damageReaction = animationsEnabled ? damageReaction(state.id, state.hasRedOverlay, state.ageInTicks) : DamageEyeReaction.NONE;
+        boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA;
         EyeExpression leftEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, bowSquint);
         EyeExpression rightEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, bowSquint);
+        if (damageReaction == DamageEyeReaction.CLOSED) {
+            leftEye = EyeExpression.CLOSED;
+            rightEye = EyeExpression.CLOSED;
+            mirroredEye = 0;
+        }
 
         poseStack.pushPose();
         getParentModel().head.translateAndRotate(poseStack);
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
-        submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, EyeSide.LEFT, hurtSclera);
-        submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, EyeSide.RIGHT, hurtSclera);
+        submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, hurtSclera);
+        submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, hurtSclera);
         if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
@@ -105,7 +112,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         poseStack.popPose();
     }
 
-    private static void submitEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, EyeSide side, boolean hurtSclera) {
+    private static void submitEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, boolean hurtSclera) {
         int clampedSkinX = clamp(skinX, 0, (int) SKIN_SIZE - eyeWidth);
         int clampedSkinY = clamp(skinY, 0, (int) SKIN_SIZE - eyeHeight);
         int clampedEyelidSkinX = clamp(eyelidColorX, 0, (int) SKIN_SIZE - 1);
@@ -120,7 +127,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         }
 
         if (expression == EyeExpression.OPEN && shouldExtendSclera(eyeWidth, eyeHeight, hurtSclera)) {
-            submitHurtScleraEye(poseStack, collector, renderType, light, overlay, clampedSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, side, mirrored);
+            submitHurtScleraEye(poseStack, collector, renderType, light, overlay, clampedSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, mirrored);
             return;
         }
 
@@ -184,9 +191,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         CLOSED
     }
 
-    private enum EyeSide {
-        LEFT,
-        RIGHT
+    private enum DamageEyeReaction {
+        NONE,
+        SCLERA,
+        CLOSED
     }
 
 
@@ -323,25 +331,38 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return hurtSclera && eyeWidth == 2 && (eyeHeight == 1 || eyeHeight == 2);
     }
 
-    private static void submitHurtScleraEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, EyeSide side, boolean mirrored) {
+    private static void submitHurtScleraEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, boolean mirrored) {
+        float extendedDstY1 = dstY1 - HURT_SCLERA_EXTENSION;
         for (int column = 0; column < eyeWidth; column++) {
             int sourceX = mirrored ? skinX + eyeWidth - 1 - column : skinX + column;
             float columnDstX1 = dstX1 + column;
             float columnDstX2 = columnDstX1 + 1.0F;
-            if (side == EyeSide.LEFT && column == 0) {
-                columnDstX1 -= HURT_SCLERA_EXTENSION;
-            } else if (side == EyeSide.RIGHT && column == eyeWidth - 1) {
-                columnDstX2 += HURT_SCLERA_EXTENSION;
-            }
-
             float u1 = sourceX / SKIN_SIZE;
             float v1 = skinY / SKIN_SIZE;
             float u2 = (sourceX + 1) / SKIN_SIZE;
             float v2 = (skinY + eyeHeight) / SKIN_SIZE;
             float finalDstX1 = columnDstX1;
             float finalDstX2 = columnDstX2;
-            collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, finalDstX1, dstY1, finalDstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
+            collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, finalDstX1, extendedDstY1, finalDstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
         }
+    }
+
+    private static DamageEyeReaction damageReaction(int entityId, boolean hurt, float ageInTicks) {
+        if (!hurt) {
+            DAMAGE_REACTIONS.remove(entityId);
+            return DamageEyeReaction.NONE;
+        }
+
+        return DAMAGE_REACTIONS.computeIfAbsent(entityId, id -> {
+            int roll = seededOffset(id, (int) ageInTicks + 97, 100);
+            if (roll < 45) {
+                return DamageEyeReaction.CLOSED;
+            }
+            if (roll < 90) {
+                return DamageEyeReaction.SCLERA;
+            }
+            return DamageEyeReaction.NONE;
+        });
     }
 
     private static EyeExpression eyeExpression(boolean sleeping, boolean animationsEnabled, boolean blinking, boolean spyglassClosed, boolean bowSquint) {

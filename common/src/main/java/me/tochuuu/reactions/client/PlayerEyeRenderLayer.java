@@ -346,8 +346,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
 
     private static void submitHurtScleraEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, EyeSide side, boolean mirrored) {
         float extendedDstY1 = dstY1 - HURT_SCLERA_EXTENSION;
+        int externalColumn = side == EyeSide.LEFT ? 0 : eyeWidth - 1;
+        int externalSourceX = mirrored ? skinX + eyeWidth - 1 - externalColumn : skinX + externalColumn;
+        float externalU1 = externalSourceX / SKIN_SIZE;
+        float externalV1 = skinY / SKIN_SIZE;
+        float externalU2 = (externalSourceX + 1) / SKIN_SIZE;
+        float externalV2 = (skinY + eyeHeight) / SKIN_SIZE;
+        float topInsetY2 = Math.min(dstY2, dstY1 + HURT_SCLERA_EXTENSION);
+        quad(consumer, poseStack.last(), dstX1, dstY1, dstX1 + eyeWidth, topInsetY2, externalU1, externalV1, externalU2, externalV2, light, overlay, NORMAL_COLOR);
+
         for (int column = 0; column < eyeWidth; column++) {
-            if (side == EyeSide.LEFT && column != 0 || side == EyeSide.RIGHT && column != eyeWidth - 1) {
+            if (column != externalColumn) {
                 continue;
             }
 

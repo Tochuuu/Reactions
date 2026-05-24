@@ -343,8 +343,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         float externalV1 = skinY / SKIN_SIZE;
         float externalU2 = (externalSourceX + 1) / SKIN_SIZE;
         float externalV2 = (skinY + eyeHeight) / SKIN_SIZE;
-        float topInsetY2 = Math.min(dstY2, dstY1 + HURT_SCLERA_EXTENSION);
-        quad(bufferSource.getBuffer(renderType), poseStack.last(), dstX1, dstY1, dstX1 + eyeWidth, topInsetY2, externalU1, externalV1, externalU2, externalV2, light, overlay, NORMAL_COLOR);
+        quad(bufferSource.getBuffer(renderType), poseStack.last(), dstX1, extendedDstY1, dstX1 + eyeWidth, dstY1, externalU1, externalV1, externalU2, externalV2, light, overlay, NORMAL_COLOR);
 
         for (int column = 0; column < eyeWidth; column++) {
             if (column != externalColumn) {

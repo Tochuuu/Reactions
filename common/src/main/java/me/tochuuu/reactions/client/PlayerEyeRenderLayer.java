@@ -40,6 +40,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, 11, 14, 12, 14, 10, 11, 2, 1);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> DAMAGE_REACTIONS = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, DamageEyeReaction> LAST_DAMAGE_REACTIONS = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, Integer> DAMAGE_REACTION_STREAKS = new java.util.HashMap<>();
 
     public PlayerEyeRenderLayer(RenderLayerParent<AvatarRenderState, PlayerModel> parent) {
         super(parent);
@@ -90,8 +92,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         poseStack.pushPose();
         getParentModel().head.translateAndRotate(poseStack);
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
-        submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, hurtSclera);
-        submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, hurtSclera);
+        submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, EyeSide.LEFT, hurtSclera);
+        submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, EyeSide.RIGHT, hurtSclera);
         if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
@@ -112,7 +114,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         poseStack.popPose();
     }
 
-    private static void submitEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, boolean hurtSclera) {
+    private static void submitEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, EyeSide side, boolean hurtSclera) {
         int clampedSkinX = clamp(skinX, 0, (int) SKIN_SIZE - eyeWidth);
         int clampedSkinY = clamp(skinY, 0, (int) SKIN_SIZE - eyeHeight);
         int clampedEyelidSkinX = clamp(eyelidColorX, 0, (int) SKIN_SIZE - 1);
@@ -127,7 +129,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         }
 
         if (expression == EyeExpression.OPEN && shouldExtendSclera(eyeWidth, eyeHeight, hurtSclera)) {
-            submitHurtScleraEye(poseStack, collector, renderType, light, overlay, clampedSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, mirrored);
+            submitHurtScleraEye(poseStack, collector, renderType, light, overlay, clampedSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, side, mirrored);
             return;
         }
 
@@ -195,6 +197,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         NONE,
         SCLERA,
         CLOSED
+    }
+
+    private enum EyeSide {
+        LEFT,
+        RIGHT
     }
 
 
@@ -331,9 +338,13 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return hurtSclera && eyeWidth == 2 && (eyeHeight == 1 || eyeHeight == 2);
     }
 
-    private static void submitHurtScleraEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, boolean mirrored) {
+    private static void submitHurtScleraEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, EyeSide side, boolean mirrored) {
         float extendedDstY1 = dstY1 - HURT_SCLERA_EXTENSION;
         for (int column = 0; column < eyeWidth; column++) {
+            if (side == EyeSide.LEFT && column != 0 || side == EyeSide.RIGHT && column != eyeWidth - 1) {
+                continue;
+            }
+
             int sourceX = mirrored ? skinX + eyeWidth - 1 - column : skinX + column;
             float columnDstX1 = dstX1 + column;
             float columnDstX2 = columnDstX1 + 1.0F;
@@ -353,16 +364,41 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             return DamageEyeReaction.NONE;
         }
 
-        return DAMAGE_REACTIONS.computeIfAbsent(entityId, id -> {
-            int roll = seededOffset(id, (int) ageInTicks + 97, 100);
-            if (roll < 45) {
-                return DamageEyeReaction.CLOSED;
-            }
-            if (roll < 90) {
-                return DamageEyeReaction.SCLERA;
-            }
-            return DamageEyeReaction.NONE;
-        });
+        return DAMAGE_REACTIONS.computeIfAbsent(entityId, id -> chooseDamageReaction(id, ageInTicks));
+    }
+
+    private static DamageEyeReaction chooseDamageReaction(int entityId, float ageInTicks) {
+        DamageEyeReaction reaction = randomDamageReaction(entityId, ageInTicks);
+        DamageEyeReaction lastReaction = LAST_DAMAGE_REACTIONS.get(entityId);
+        int streak = DAMAGE_REACTION_STREAKS.getOrDefault(entityId, 0);
+        if (reaction != DamageEyeReaction.NONE && reaction == lastReaction && streak >= 2) {
+            reaction = oppositeDamageReaction(reaction);
+        }
+
+        if (reaction == DamageEyeReaction.NONE) {
+            DAMAGE_REACTION_STREAKS.put(entityId, 0);
+        } else if (reaction == lastReaction) {
+            DAMAGE_REACTION_STREAKS.put(entityId, streak + 1);
+        } else {
+            DAMAGE_REACTION_STREAKS.put(entityId, 1);
+        }
+        LAST_DAMAGE_REACTIONS.put(entityId, reaction);
+        return reaction;
+    }
+
+    private static DamageEyeReaction randomDamageReaction(int entityId, float ageInTicks) {
+        int roll = seededOffset(entityId, (int) ageInTicks + 97, 100);
+        if (roll < 48) {
+            return DamageEyeReaction.CLOSED;
+        }
+        if (roll < 96) {
+            return DamageEyeReaction.SCLERA;
+        }
+        return DamageEyeReaction.NONE;
+    }
+
+    private static DamageEyeReaction oppositeDamageReaction(DamageEyeReaction reaction) {
+        return reaction == DamageEyeReaction.CLOSED ? DamageEyeReaction.SCLERA : DamageEyeReaction.CLOSED;
     }
 
     private static EyeExpression eyeExpression(boolean sleeping, boolean animationsEnabled, boolean blinking, boolean spyglassClosed, boolean bowSquint) {

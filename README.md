@@ -5,7 +5,7 @@
 Reactions brings player skins to life with customizable, vanilla-friendly facial animations. Your character can blink, react while using a spyglass, and share eye configuration with other players running the mod.
 
 ## Version
-- **Mod version:** 0.4.0
+- **Mod version:** 0.5.0
 
 ## Features
 - **Blinking:** Animated eyelid movement.

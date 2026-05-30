@@ -142,7 +142,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             return;
         }
 
-        if (expression == EyeExpression.OPEN && eyeWidth >= 2 && (eyeOffset != 0.0F || scleraProgress > 0.0F)) {
+        if (expression == EyeExpression.OPEN && eyeOffset != 0.0F && eyeWidth >= 2) {
             submitSmoothOpenEye(poseStack, collector, renderType, light, overlay, clampedSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, side, eyeOffset, hurtSclera ? scleraProgress : 0.0F);
             return;
         }
@@ -398,8 +398,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, dstX1, extendedDstY1, dstX1 + eyeWidth, dstY2, scleraU1, scleraV1, scleraU2, scleraV2, light, overlay, NORMAL_COLOR));
 
         int pupilSourceX = skinX + internalColumn;
-        float pupilTravel = Math.max(-1.0F, Math.min(1.0F, eyeOffset));
-        float pupilX = Math.max(dstX1, Math.min(dstX1 + eyeWidth - 1.0F, dstX1 + internalColumn + pupilTravel));
+        float pupilX = Math.max(dstX1, Math.min(dstX1 + eyeWidth - 1.0F, dstX1 + internalColumn + eyeOffset));
         float pupilU1 = pupilSourceX / SKIN_SIZE;
         float pupilV1 = skinY / SKIN_SIZE;
         float pupilU2 = (pupilSourceX + 1) / SKIN_SIZE;

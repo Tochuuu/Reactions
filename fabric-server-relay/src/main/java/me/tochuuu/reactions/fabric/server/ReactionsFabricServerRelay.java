@@ -30,8 +30,8 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        PayloadTypeRegistry.playC2S().register(EyeConfigC2SPayload.TYPE, EyeConfigC2SPayload.STREAM_CODEC);
-        PayloadTypeRegistry.playS2C().register(EyeConfigS2CPayload.TYPE, EyeConfigS2CPayload.STREAM_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(EyeConfigC2SPayload.TYPE, EyeConfigC2SPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(EyeConfigS2CPayload.TYPE, EyeConfigS2CPayload.STREAM_CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(EyeConfigC2SPayload.TYPE, (payload, context) -> handleConfig(context.player(), payload.config()));
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> PENDING_SYNC.put(handler.player.getUUID(), SERVER_SYNC_RETRY_TICKS));

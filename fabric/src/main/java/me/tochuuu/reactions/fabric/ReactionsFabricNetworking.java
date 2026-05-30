@@ -22,8 +22,8 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
         initialized = true;
         ReactionsNetworking.setPlatform(INSTANCE);
 
-        PayloadTypeRegistry.playC2S().register(ReactionsNetworking.EyeConfigC2SPayload.TYPE, ReactionsNetworking.EyeConfigC2SPayload.STREAM_CODEC);
-        PayloadTypeRegistry.playS2C().register(ReactionsNetworking.EyeConfigS2CPayload.TYPE, ReactionsNetworking.EyeConfigS2CPayload.STREAM_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ReactionsNetworking.EyeConfigC2SPayload.TYPE, ReactionsNetworking.EyeConfigC2SPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ReactionsNetworking.EyeConfigS2CPayload.TYPE, ReactionsNetworking.EyeConfigS2CPayload.STREAM_CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeConfigC2SPayload.TYPE, (payload, context) -> ReactionsNetworking.handleServerboundConfig(payload, context.player()));
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> ReactionsNetworking.onServerPlayerJoin(handler.player));

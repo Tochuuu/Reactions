@@ -4,7 +4,7 @@ import me.tochuuu.reactions.client.ReactionsClient;
 import me.tochuuu.reactions.fabric.ReactionsFabricNetworking;
 import me.tochuuu.reactions.network.ReactionsNetworking;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 
@@ -22,7 +22,7 @@ public final class ReactionsFabricClientNetworking extends ReactionsFabricNetwor
         initialized = true;
         ReactionsNetworking.setPlatform(INSTANCE);
 
-        KeyBindingHelper.registerKeyBinding(ReactionsClient.openConfigKey());
+        KeyMappingHelper.registerKeyMapping(ReactionsClient.openConfigKey());
         ClientPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeConfigS2CPayload.TYPE, (payload, context) -> ReactionsNetworking.handleClientboundConfig(payload));
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ReactionsNetworking.onClientJoin());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ReactionsNetworking.onClientQuit());

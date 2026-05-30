@@ -1,6 +1,6 @@
 package me.tochuuu.reactions.client;
 
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -256,10 +256,10 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         ReactionsClientConfig config = ReactionsClientConfig.get();
-        super.render(graphics, mouseX, mouseY, partialTick);
-        graphics.drawString(this.font, this.title, this.width / 2 - this.font.width(this.title) / 2, 16, 0xFFFFFFFF);
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+        graphics.text(this.font, this.title, this.width / 2 - this.font.width(this.title) / 2, 16, 0xFFFFFFFF);
 
         Identifier texture = skinTexture();
         graphics.blit(RenderPipelines.GUI_TEXTURED, texture, faceX, faceY, FACE_U, FACE_V, faceSize, faceSize, FACE_PIXELS, FACE_PIXELS, SKIN_SIZE, SKIN_SIZE);
@@ -271,18 +271,18 @@ public final class ReactionsConfigScreen extends Screen {
 
         if (!compactLayout) {
             int labelY = faceY + faceSize + 8;
-            graphics.drawString(this.font, Component.literal("Click the face to set " + mode.label), faceX, labelY, 0xFFFFFFFF);
-            graphics.drawString(this.font, Component.literal("Eyes: " + config.eyeWidth + "x" + config.eyeHeight), faceX, labelY + 12, 0xFFBFC7D5);
-            graphics.drawString(this.font, Component.literal("Mouth: " + config.leftMouthX + "," + config.leftMouthY + " + " + config.rightMouthX + "," + config.rightMouthY), faceX, labelY + 24, 0xFFBFC7D5);
-            graphics.drawString(this.font, Component.literal("Eyelid color: " + config.eyelidColorX + ", " + config.eyelidColorY), faceX, labelY + 36, 0xFFBFC7D5);
+            graphics.text(this.font, Component.literal("Click the face to set " + mode.label), faceX, labelY, 0xFFFFFFFF);
+            graphics.text(this.font, Component.literal("Eyes: " + config.eyeWidth + "x" + config.eyeHeight), faceX, labelY + 12, 0xFFBFC7D5);
+            graphics.text(this.font, Component.literal("Mouth: " + config.leftMouthX + "," + config.leftMouthY + " + " + config.rightMouthX + "," + config.rightMouthY), faceX, labelY + 24, 0xFFBFC7D5);
+            graphics.text(this.font, Component.literal("Eyelid color: " + config.eyelidColorX + ", " + config.eyelidColorY), faceX, labelY + 36, 0xFFBFC7D5);
             if (sizeLimitMessageTicks > 0) {
-                graphics.drawString(this.font, Component.literal("Cannot make eyes bigger"), faceX, labelY + 48, 0xFFFF4040);
+                graphics.text(this.font, Component.literal("Cannot make eyes bigger"), faceX, labelY + 48, 0xFFFF4040);
             }
 
             int panelX = this.width < BASE_FACE_SIZE + 24 + PANEL_WIDTH + 24 ? Math.max(12, this.width / 2 - PANEL_WIDTH / 2) : faceX + faceSize + 24;
-            graphics.drawString(this.font, Component.literal("Eye size"), panelX, eyeSizeHeaderY, 0xFFBFC7D5);
-            graphics.drawString(this.font, Component.literal("Width"), panelX, eyeSizeHeaderY + 14, 0xFFBFC7D5);
-            graphics.drawString(this.font, Component.literal("Height"), panelX, eyeSizeHeaderY + 38, 0xFFBFC7D5);
+            graphics.text(this.font, Component.literal("Eye size"), panelX, eyeSizeHeaderY, 0xFFBFC7D5);
+            graphics.text(this.font, Component.literal("Width"), panelX, eyeSizeHeaderY + 14, 0xFFBFC7D5);
+            graphics.text(this.font, Component.literal("Height"), panelX, eyeSizeHeaderY + 38, 0xFFBFC7D5);
         }
     }
 
@@ -317,42 +317,42 @@ public final class ReactionsConfigScreen extends Screen {
         }
     }
 
-    private void drawGrid(GuiGraphics graphics) {
+    private void drawGrid(GuiGraphicsExtractor graphics) {
         for (int i = 0; i <= FACE_PIXELS; i++) {
             int line = faceX + i * pixelSize;
             graphics.fill(line, faceY, line + 1, faceY + faceSize, 0x66000000);
             line = faceY + i * pixelSize;
             graphics.fill(faceX, line, faceX + faceSize, line + 1, 0x66000000);
         }
-        graphics.renderOutline(faceX, faceY, faceSize, faceSize, 0xFFFFFFFF);
+        graphics.outline(faceX, faceY, faceSize, faceSize, 0xFFFFFFFF);
     }
 
-    private void drawEyeSelection(GuiGraphics graphics, int skinX, int skinY, int width, int height, int color) {
+    private void drawEyeSelection(GuiGraphicsExtractor graphics, int skinX, int skinY, int width, int height, int color) {
         int x = faceX + (skinX - FACE_U) * pixelSize;
         int y = faceY + (skinY - FACE_V) * pixelSize;
         int w = width * pixelSize;
         int h = height * pixelSize;
         graphics.fill(x, y, x + w, y + h, color & 0x55FFFFFF);
-        graphics.renderOutline(x, y, w, h, color);
+        graphics.outline(x, y, w, h, color);
     }
 
-    private void drawMouthSelection(GuiGraphics graphics, int leftSkinX, int leftSkinY, int rightSkinX, int rightSkinY) {
+    private void drawMouthSelection(GuiGraphicsExtractor graphics, int leftSkinX, int leftSkinY, int rightSkinX, int rightSkinY) {
         int color = ReactionsClientConfig.get().showMouth ? 0xFFFFD45A : 0xFFBFA44A;
         drawPixelSelection(graphics, leftSkinX, leftSkinY, color);
         drawPixelSelection(graphics, rightSkinX, rightSkinY, color);
     }
 
-    private void drawPixelSelection(GuiGraphics graphics, int skinX, int skinY, int color) {
+    private void drawPixelSelection(GuiGraphicsExtractor graphics, int skinX, int skinY, int color) {
         int x = faceX + (skinX - FACE_U) * pixelSize;
         int y = faceY + (skinY - FACE_V) * pixelSize;
         if (x < faceX || y < faceY || x >= faceX + faceSize || y >= faceY + faceSize) {
             return;
         }
         graphics.fill(x, y, x + pixelSize, y + pixelSize, color & 0x66FFFFFF);
-        graphics.renderOutline(x, y, pixelSize, pixelSize, color);
+        graphics.outline(x, y, pixelSize, pixelSize, color);
     }
 
-    private void drawPixelMarker(GuiGraphics graphics, int skinX, int skinY, int color) {
+    private void drawPixelMarker(GuiGraphicsExtractor graphics, int skinX, int skinY, int color) {
         int x = faceX + (skinX - FACE_U) * pixelSize;
         int y = faceY + (skinY - FACE_V) * pixelSize;
         if (x < faceX || y < faceY || x >= faceX + faceSize || y >= faceY + faceSize) {
@@ -360,7 +360,7 @@ public final class ReactionsConfigScreen extends Screen {
         }
         int inset = Math.max(3, pixelSize / 4);
         graphics.fill(x + inset, y + inset, x + pixelSize - inset, y + pixelSize - inset, color);
-        graphics.renderOutline(x + inset - 1, y + inset - 1, pixelSize - (inset - 1) * 2, pixelSize - (inset - 1) * 2, 0xFF000000);
+        graphics.outline(x + inset - 1, y + inset - 1, pixelSize - (inset - 1) * 2, pixelSize - (inset - 1) * 2, 0xFF000000);
     }
 
     private Identifier skinTexture() {

@@ -75,9 +75,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         boolean animationsEnabled = isSelf ? config.animateSelf : config.animateOthers;
         boolean sleeping = state.hasPose(Pose.SLEEPING);
         boolean blinking = !sleeping && animationsEnabled && isBlinking(state, config);
-        boolean smoothStyle = config.animationStyle == ReactionsClientConfig.AnimationStyle.SMOOTH;
-        int mirroredEye = animationsEnabled && !blinking && !smoothStyle ? mirroredIdleEye(state) : 0;
-        float idleEyeOffset = animationsEnabled && !blinking && smoothStyle ? smoothIdleEyeOffset(state, config.movementPixels) : 0.0F;
+        int mirroredEye = animationsEnabled && !blinking ? mirroredIdleEye(state) : 0;
         HumanoidArm spyglassArm = spyglassUseArm(state);
         HumanoidArm bowArm = bowUseArm(state);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(state, bowArm);
@@ -94,8 +92,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         poseStack.pushPose();
         getParentModel().head.translateAndRotate(poseStack);
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
-        submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, idleEyeOffset, EyeSide.LEFT, hurtSclera);
-        submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, idleEyeOffset, EyeSide.RIGHT, hurtSclera);
+        submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, EyeSide.LEFT, hurtSclera);
+        submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, EyeSide.RIGHT, hurtSclera);
         if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
@@ -116,7 +114,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         poseStack.popPose();
     }
 
-    private static void submitEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, float eyeOffset, EyeSide side, boolean hurtSclera) {
+    private static void submitEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, EyeSide side, boolean hurtSclera) {
         int clampedSkinX = clamp(skinX, 0, (int) SKIN_SIZE - eyeWidth);
         int clampedSkinY = clamp(skinY, 0, (int) SKIN_SIZE - eyeHeight);
         int clampedEyelidSkinX = clamp(eyelidColorX, 0, (int) SKIN_SIZE - 1);
@@ -124,9 +122,6 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float dstX1 = skinX - HEAD_FRONT_U - 4.0F;
         float dstY1 = skinY - HEAD_FRONT_V - 8.0F;
         float dstY2 = dstY1 + eyeHeight;
-        if (expression == EyeExpression.OPEN) {
-            dstX1 += eyeOffset;
-        }
 
         if (expression == EyeExpression.SQUINT) {
             submitSquintEye(poseStack, collector, renderType, light, overlay, clampedSkinX, clampedSkinY, clampedEyelidSkinX, clampedEyelidSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, mirrored);
@@ -171,8 +166,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float v2 = (sourceY + (expression == EyeExpression.CLOSED ? 1 : eyeHeight)) / SKIN_SIZE;
 
         int color = expression == EyeExpression.CLOSED ? EYELID_DARKEN_COLOR : NORMAL_COLOR;
-        float finalDstX1 = dstX1;
-        collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, finalDstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color));
+        collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color));
     }
 
     private record EyeSettings(int leftEyeX, int leftEyeY, int rightEyeX, int rightEyeY, boolean mouthEnabled, int leftMouthX, int leftMouthY, int rightMouthX, int rightMouthY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight) {
@@ -509,34 +503,6 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             return 1;
         }
         return 0;
-    }
-
-    private static float smoothIdleEyeOffset(AvatarRenderState state, int movementPixels) {
-        if (state.walkAnimationSpeed > 0.01F || movementPixels <= 0) {
-            IDLE_STARTED_AT.remove(state.id);
-            return 0.0F;
-        }
-
-        float idleStartedAt = IDLE_STARTED_AT.computeIfAbsent(state.id, id -> state.ageInTicks);
-        int idleTicks = (int) (state.ageInTicks - idleStartedAt);
-        int cycleTick = Math.floorMod(idleTicks, IDLE_LOOK_CYCLE_TICKS);
-        if (cycleTick < IDLE_LOOK_DELAY_TICKS) {
-            return 0.0F;
-        }
-
-        int phase = cycleTick - IDLE_LOOK_DELAY_TICKS;
-        if (phase < IDLE_LOOK_STEP_TICKS) {
-            return -movementPixels * smoothPulse(phase);
-        }
-        if (phase < IDLE_LOOK_STEP_TICKS * 2) {
-            return movementPixels * smoothPulse(phase - IDLE_LOOK_STEP_TICKS);
-        }
-        return 0.0F;
-    }
-
-    private static float smoothPulse(int phase) {
-        float progress = Math.max(0.0F, Math.min(1.0F, phase / (float) IDLE_LOOK_STEP_TICKS));
-        return (float) Math.sin(progress * Math.PI);
     }
 
     private static RenderType renderType(Identifier texture) {

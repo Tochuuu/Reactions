@@ -24,7 +24,6 @@ public final class ReactionsClientConfig {
     public boolean animateSelf = true;
     public boolean animateOthers = true;
     public boolean animateBowShooting = false;
-    public AnimationStyle animationStyle = AnimationStyle.BLOCKY;
     public boolean showMouth = true;
     public int leftEyeX = 9;
     public int leftEyeY = 12;
@@ -126,9 +125,6 @@ public final class ReactionsClientConfig {
         if (playerOverrides == null) {
             playerOverrides = new HashMap<>();
         }
-        if (animationStyle == null) {
-            animationStyle = AnimationStyle.BLOCKY;
-        }
         eyeWidth = clamp(eyeWidth, 1, 2);
         eyeHeight = clamp(eyeHeight, 1, 3);
         leftEyeX = clamp(leftEyeX, 8, 16 - eyeWidth);
@@ -153,11 +149,6 @@ public final class ReactionsClientConfig {
 
     private static String playerKey(String playerName) {
         return playerName.trim().toLowerCase(Locale.ROOT);
-    }
-
-    public enum AnimationStyle {
-        BLOCKY,
-        SMOOTH
     }
 
     public static final class PlayerOverride {

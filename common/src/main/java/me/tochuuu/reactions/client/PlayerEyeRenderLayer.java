@@ -14,9 +14,7 @@ import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.HumanoidArm;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -39,11 +37,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final float BOW_FULL_CHARGE_TICKS = 20.0F;
     private static final float SQUINT_VISIBLE_EYE_COVERAGE = 0.5F;
     private static final float HURT_SCLERA_EXTENSION = 0.5F;
-    private static final float LOW_HEALTH_RATIO = 0.35F;
-    private static final int COMBAT_EXPRESSION_TICKS = 50;
     private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, 11, 14, 12, 14, 10, 11, 2, 1);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
-    private static final java.util.Map<Integer, Float> COMBAT_ACTIVE_UNTIL = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> DAMAGE_REACTIONS = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> LAST_DAMAGE_REACTIONS = new java.util.HashMap<>();
     private static final java.util.Map<Integer, Integer> DAMAGE_REACTION_STREAKS = new java.util.HashMap<>();
@@ -84,28 +79,22 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         HumanoidArm spyglassArm = spyglassUseArm(state);
         HumanoidArm bowArm = bowUseArm(state);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(state, bowArm);
-        boolean advancementActive = animationsEnabled && AdvancementMouthReaction.active(state.id);
-        GameplayExpression gameplayExpression = animationsEnabled ? gameplayExpression(minecraft, state, advancementActive) : GameplayExpression.NONE;
         DamageEyeReaction damageReaction = animationsEnabled ? damageReaction(state.id, state.hasRedOverlay, state.ageInTicks) : DamageEyeReaction.NONE;
-        boolean extendedSclera = damageReaction == DamageEyeReaction.SCLERA || gameplayExpression == GameplayExpression.SURPRISED;
-        EyeExpression leftEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, bowSquint, gameplayExpression, state.id, state.ageInTicks);
-        EyeExpression rightEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, bowSquint, gameplayExpression, state.id, state.ageInTicks);
+        boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA;
+        EyeExpression leftEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, bowSquint);
+        EyeExpression rightEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, bowSquint);
         if (damageReaction == DamageEyeReaction.CLOSED) {
             leftEye = EyeExpression.CLOSED;
             rightEye = EyeExpression.CLOSED;
-            mirroredEye = 0;
-        } else if (damageReaction == DamageEyeReaction.SCLERA) {
-            leftEye = EyeExpression.OPEN;
-            rightEye = EyeExpression.OPEN;
             mirroredEye = 0;
         }
 
         poseStack.pushPose();
         getParentModel().head.translateAndRotate(poseStack);
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
-        submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, EyeSide.LEFT, extendedSclera);
-        submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, EyeSide.RIGHT, extendedSclera);
-        if (advancementActive) {
+        submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, EyeSide.LEFT, hurtSclera);
+        submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, EyeSide.RIGHT, hurtSclera);
+        if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
             submitMouth(poseStack, collector, renderType, light, overlay, eyes);
@@ -208,15 +197,6 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         NONE,
         SCLERA,
         CLOSED
-    }
-
-    private enum GameplayExpression {
-        NONE,
-        SURPRISED,
-        LOW_HEALTH,
-        COMBAT,
-        FOCUS,
-        FROZEN
     }
 
     private enum EyeSide {
@@ -429,42 +409,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return reaction == DamageEyeReaction.CLOSED ? DamageEyeReaction.SCLERA : DamageEyeReaction.CLOSED;
     }
 
-    private static GameplayExpression gameplayExpression(Minecraft minecraft, AvatarRenderState state, boolean advancementActive) {
-        if (advancementActive) {
-            return GameplayExpression.SURPRISED;
-        }
-        if (state.isFullyFrozen) {
-            return GameplayExpression.FROZEN;
-        }
-        if (isLowHealth(minecraft, state.id)) {
-            return GameplayExpression.LOW_HEALTH;
-        }
-        if (isInCombat(state.id, state.attackTime > 0.0F, state.ageInTicks)) {
-            return GameplayExpression.COMBAT;
-        }
-        if (state.isCrouching || state.isInWater || state.isFallFlying) {
-            return GameplayExpression.FOCUS;
-        }
-        return GameplayExpression.NONE;
-    }
-
-    private static EyeExpression eyeExpression(boolean sleeping, boolean animationsEnabled, boolean blinking, boolean spyglassClosed, boolean bowSquint, GameplayExpression gameplayExpression, int entityId, float ageInTicks) {
-        if (sleeping || animationsEnabled && spyglassClosed) {
+    private static EyeExpression eyeExpression(boolean sleeping, boolean animationsEnabled, boolean blinking, boolean spyglassClosed, boolean bowSquint) {
+        if (sleeping || animationsEnabled && (blinking || spyglassClosed)) {
             return EyeExpression.CLOSED;
         }
-        if (!animationsEnabled) {
-            return EyeExpression.OPEN;
-        }
-        if (gameplayExpression == GameplayExpression.SURPRISED) {
-            return EyeExpression.OPEN;
-        }
-        if (blinking || gameplayExpression == GameplayExpression.FROZEN) {
-            return EyeExpression.CLOSED;
-        }
-        if (gameplayExpression == GameplayExpression.LOW_HEALTH) {
-            return lowHealthClosed(entityId, ageInTicks) ? EyeExpression.CLOSED : EyeExpression.SQUINT;
-        }
-        if (bowSquint || gameplayExpression == GameplayExpression.COMBAT || gameplayExpression == GameplayExpression.FOCUS) {
+        if (animationsEnabled && bowSquint) {
             return EyeExpression.SQUINT;
         }
         return EyeExpression.OPEN;
@@ -521,42 +470,6 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
 
     private static boolean isBowFullyDrawn(AvatarRenderState state, HumanoidArm bowArm) {
         return bowArm != null && state.ticksUsingItem(bowArm) >= BOW_FULL_CHARGE_TICKS;
-    }
-
-    private static boolean isLowHealth(Minecraft minecraft, int entityId) {
-        if (minecraft.level == null) {
-            return false;
-        }
-
-        Entity entity = minecraft.level.getEntity(entityId);
-        if (!(entity instanceof LivingEntity living)) {
-            return false;
-        }
-
-        float maxHealth = living.getMaxHealth();
-        return maxHealth > 0.0F && living.getHealth() > 0.0F && living.getHealth() / maxHealth <= LOW_HEALTH_RATIO;
-    }
-
-    private static boolean isInCombat(int entityId, boolean attacking, float ageInTicks) {
-        if (attacking) {
-            COMBAT_ACTIVE_UNTIL.put(entityId, ageInTicks + COMBAT_EXPRESSION_TICKS);
-        }
-
-        Float activeUntil = COMBAT_ACTIVE_UNTIL.get(entityId);
-        if (activeUntil == null) {
-            return false;
-        }
-        if (ageInTicks <= activeUntil) {
-            return true;
-        }
-
-        COMBAT_ACTIVE_UNTIL.remove(entityId);
-        return false;
-    }
-
-    private static boolean lowHealthClosed(int entityId, float ageInTicks) {
-        int phase = Math.floorMod((int) ageInTicks + seededOffset(entityId, 43, 40), 80);
-        return phase < 6;
     }
 
     private static int seededOffset(int entityId, int index, int maxExclusive) {

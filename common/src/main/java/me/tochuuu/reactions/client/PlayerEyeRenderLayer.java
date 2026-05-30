@@ -23,11 +23,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final float SKIN_SIZE = 64.0F;
     private static final float HEAD_FRONT_U = 8.0F;
     private static final float HEAD_FRONT_V = 8.0F;
-    private static final float HEAD_FACE_Z = -4.032F / 16.0F;
+    private static final float HEAD_FACE_Z = -4.004F / 16.0F;
     private static final float MOUTH_COVER_FACE_Z = -4.018F / 16.0F;
     private static final float MOUTH_FACE_Z = -4.026F / 16.0F;
     private static final float MOUTH_UV_INSET = 0.125F;
-    private static final float EYE_UV_INSET = 0.125F;
+    private static final float EYE_UV_INSET = 0.01F;
     private static final float ADVANCEMENT_MOUTH_TOP_EXTENSION = 0.001F;
     private static final int NORMAL_COLOR = 0xFFFFFFFF;
     private static final int EYELID_DARKEN_COLOR = 0xFFB0B0B0;
@@ -165,10 +165,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
                 int sourceY = clampedSkinY;
                 float columnDstX1 = dstX1 + column;
                 float columnDstX2 = columnDstX1 + 1.0F;
-                float u1 = insetU1(sourceX);
-                float v1 = insetV1(sourceY);
-                float u2 = insetU2(sourceX);
-                float v2 = insetV2(sourceY + eyeHeight - 1);
+                float u1 = sourceX / SKIN_SIZE;
+                float v1 = sourceY / SKIN_SIZE;
+                float u2 = (sourceX + 1) / SKIN_SIZE;
+                float v2 = (sourceY + eyeHeight) / SKIN_SIZE;
                 quad(consumer, poseStack.last(), columnDstX1, dstY1, columnDstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
             }
             return;
@@ -186,12 +186,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
 
         float dstX2 = dstX1 + eyeWidth;
 
-        int sourceWidth = expression == EyeExpression.CLOSED ? 1 : eyeWidth;
-        int sourceHeight = expression == EyeExpression.CLOSED ? 1 : eyeHeight;
-        float u1 = insetU1(sourceX);
-        float v1 = insetV1(sourceY);
-        float u2 = insetU2(sourceX + sourceWidth - 1);
-        float v2 = insetV2(sourceY + sourceHeight - 1);
+        float u1 = sourceX / SKIN_SIZE;
+        float v1 = sourceY / SKIN_SIZE;
+        float u2 = (sourceX + (expression == EyeExpression.CLOSED ? 1 : eyeWidth)) / SKIN_SIZE;
+        float v2 = (sourceY + (expression == EyeExpression.CLOSED ? 1 : eyeHeight)) / SKIN_SIZE;
 
         int color = expression == EyeExpression.CLOSED ? EYELID_DARKEN_COLOR : NORMAL_COLOR;
         quad(consumer, poseStack.last(), dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color);
@@ -333,10 +331,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         float visibleHeight = Math.max(0.333F, (dstY2 - dstY1) * SQUINT_VISIBLE_EYE_COVERAGE);
         float splitY = Math.max(dstY1, dstY2 - visibleHeight);
         float dstX2 = dstX1 + eyeWidth;
-        float eyelidU1 = insetU1(eyelidX);
-        float eyelidV1 = insetV1(eyelidY);
-        float eyelidU2 = insetU2(eyelidX);
-        float eyelidV2 = insetV2(eyelidY);
+        float eyelidU1 = eyelidX / SKIN_SIZE;
+        float eyelidV1 = eyelidY / SKIN_SIZE;
+        float eyelidU2 = (eyelidX + 1) / SKIN_SIZE;
+        float eyelidV2 = (eyelidY + 1) / SKIN_SIZE;
         quad(consumer, poseStack.last(), dstX1, dstY1, dstX2, splitY, eyelidU1, eyelidV1, eyelidU2, eyelidV2, light, overlay, EYELID_DARKEN_COLOR);
 
         float sourceVisibleHeight = eyeHeight * SQUINT_VISIBLE_EYE_COVERAGE;
@@ -346,19 +344,19 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
                 int sourceX = skinX + eyeWidth - 1 - column;
                 float columnDstX1 = dstX1 + column;
                 float columnDstX2 = columnDstX1 + 1.0F;
-                float u1 = insetU1(sourceX);
-                float v1 = eyeUvMin(sourceY1);
-                float u2 = insetU2(sourceX);
-                float v2 = eyeUvMax(skinY + eyeHeight);
+                float u1 = sourceX / SKIN_SIZE;
+                float v1 = sourceY1 / SKIN_SIZE;
+                float u2 = (sourceX + 1) / SKIN_SIZE;
+                float v2 = (skinY + eyeHeight) / SKIN_SIZE;
                 quad(consumer, poseStack.last(), columnDstX1, splitY, columnDstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
             }
             return;
         }
 
-        float u1 = insetU1(skinX);
-        float v1 = eyeUvMin(sourceY1);
-        float u2 = insetU2(skinX + eyeWidth - 1);
-        float v2 = eyeUvMax(skinY + eyeHeight);
+        float u1 = skinX / SKIN_SIZE;
+        float v1 = sourceY1 / SKIN_SIZE;
+        float u2 = (skinX + eyeWidth) / SKIN_SIZE;
+        float v2 = (skinY + eyeHeight) / SKIN_SIZE;
         quad(consumer, poseStack.last(), dstX1, splitY, dstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
     }
 
@@ -368,17 +366,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
                 int sourceX = skinX + eyeWidth - 1 - column;
                 float columnDstX1 = dstX1 + column;
                 float columnDstX2 = columnDstX1 + 1.0F;
-                float u1 = insetU1(sourceX);
-                float v1 = insetV1(skinY);
-                float u2 = insetU2(sourceX);
-                float v2 = insetV2(skinY + eyeHeight - 1);
+                float u1 = sourceX / SKIN_SIZE;
+                float v1 = skinY / SKIN_SIZE;
+                float u2 = (sourceX + 1) / SKIN_SIZE;
+                float v2 = (skinY + eyeHeight) / SKIN_SIZE;
                 quad(consumer, poseStack.last(), columnDstX1, dstY1, columnDstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
             }
         } else {
-            float u1 = insetU1(skinX);
-            float v1 = insetV1(skinY);
-            float u2 = insetU2(skinX + eyeWidth - 1);
-            float v2 = insetV2(skinY + eyeHeight - 1);
+            float u1 = skinX / SKIN_SIZE;
+            float v1 = skinY / SKIN_SIZE;
+            float u2 = (skinX + eyeWidth) / SKIN_SIZE;
+            float v2 = (skinY + eyeHeight) / SKIN_SIZE;
             quad(consumer, poseStack.last(), dstX1, dstY1, dstX1 + eyeWidth, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
         }
 
@@ -387,10 +385,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             return;
         }
 
-        float eyelidU1 = insetU1(eyelidX);
-        float eyelidV1 = insetV1(eyelidY);
-        float eyelidU2 = insetU2(eyelidX);
-        float eyelidV2 = insetV2(eyelidY);
+        float eyelidU1 = eyelidX / SKIN_SIZE;
+        float eyelidV1 = eyelidY / SKIN_SIZE;
+        float eyelidU2 = (eyelidX + 1) / SKIN_SIZE;
+        float eyelidV2 = (eyelidY + 1) / SKIN_SIZE;
         quad(consumer, poseStack.last(), dstX1, dstY1, dstX1 + eyeWidth, dstY1 + coverHeight, eyelidU1, eyelidV1, eyelidU2, eyelidV2, light, overlay, EYELID_DARKEN_COLOR);
     }
 
@@ -416,27 +414,19 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     }
 
     private static float insetU1(int sourceX) {
-        return eyeUvMin(sourceX);
+        return (sourceX + EYE_UV_INSET) / SKIN_SIZE;
     }
 
     private static float insetU2(int sourceX) {
-        return eyeUvMax(sourceX + 1.0F);
+        return (sourceX + 1.0F - EYE_UV_INSET) / SKIN_SIZE;
     }
 
     private static float insetV1(int sourceY) {
-        return eyeUvMin(sourceY);
+        return (sourceY + EYE_UV_INSET) / SKIN_SIZE;
     }
 
     private static float insetV2(int sourceY) {
-        return eyeUvMax(sourceY + 1.0F);
-    }
-
-    private static float eyeUvMin(float source) {
-        return (source + EYE_UV_INSET) / SKIN_SIZE;
-    }
-
-    private static float eyeUvMax(float sourceExclusive) {
-        return (sourceExclusive - EYE_UV_INSET) / SKIN_SIZE;
+        return (sourceY + 1.0F - EYE_UV_INSET) / SKIN_SIZE;
     }
 
     private static boolean shouldExtendSclera(int eyeWidth, int eyeHeight, boolean hurtSclera) {

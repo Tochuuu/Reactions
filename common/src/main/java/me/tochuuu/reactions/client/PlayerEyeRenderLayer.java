@@ -27,7 +27,6 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final float MOUTH_COVER_FACE_Z = -4.018F / 16.0F;
     private static final float MOUTH_FACE_Z = -4.026F / 16.0F;
     private static final float MOUTH_UV_INSET = 0.125F;
-    private static final float EYE_UV_INSET = 0.01F;
     private static final float ADVANCEMENT_MOUTH_TOP_EXTENSION = 0.001F;
     private static final int NORMAL_COLOR = 0xFFFFFFFF;
     private static final int EYELID_DARKEN_COLOR = 0xFFB0B0B0;
@@ -396,37 +395,21 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         int externalColumn = side == EyeSide.LEFT ? 0 : eyeWidth - 1;
         int internalColumn = side == EyeSide.LEFT ? eyeWidth - 1 : 0;
         int scleraSourceX = skinX + externalColumn;
-        float scleraU1 = insetU1(scleraSourceX);
-        float scleraV1 = insetV1(skinY);
-        float scleraU2 = insetU2(scleraSourceX);
-        float scleraV2 = insetV2(skinY + eyeHeight - 1);
+        float scleraU1 = scleraSourceX / SKIN_SIZE;
+        float scleraV1 = skinY / SKIN_SIZE;
+        float scleraU2 = (scleraSourceX + 1) / SKIN_SIZE;
+        float scleraV2 = (skinY + eyeHeight) / SKIN_SIZE;
         float extendedDstY1 = dstY1 - HURT_SCLERA_EXTENSION * Math.max(0.0F, Math.min(1.0F, scleraProgress));
         quad(consumer, poseStack.last(), dstX1, extendedDstY1, dstX1 + eyeWidth, dstY2, scleraU1, scleraV1, scleraU2, scleraV2, light, overlay, NORMAL_COLOR);
 
         int pupilSourceX = skinX + internalColumn;
         float pupilTravel = Math.max(-1.0F, Math.min(1.0F, eyeOffset));
         float pupilX = Math.max(dstX1, Math.min(dstX1 + eyeWidth - 1.0F, dstX1 + internalColumn + pupilTravel));
-        float pupilU1 = insetU1(pupilSourceX);
-        float pupilV1 = insetV1(skinY);
-        float pupilU2 = insetU2(pupilSourceX);
-        float pupilV2 = insetV2(skinY + eyeHeight - 1);
+        float pupilU1 = pupilSourceX / SKIN_SIZE;
+        float pupilV1 = skinY / SKIN_SIZE;
+        float pupilU2 = (pupilSourceX + 1) / SKIN_SIZE;
+        float pupilV2 = (skinY + eyeHeight) / SKIN_SIZE;
         quad(consumer, poseStack.last(), pupilX, dstY1, pupilX + 1.0F, dstY2, pupilU1, pupilV1, pupilU2, pupilV2, light, overlay, NORMAL_COLOR);
-    }
-
-    private static float insetU1(int sourceX) {
-        return (sourceX + EYE_UV_INSET) / SKIN_SIZE;
-    }
-
-    private static float insetU2(int sourceX) {
-        return (sourceX + 1.0F - EYE_UV_INSET) / SKIN_SIZE;
-    }
-
-    private static float insetV1(int sourceY) {
-        return (sourceY + EYE_UV_INSET) / SKIN_SIZE;
-    }
-
-    private static float insetV2(int sourceY) {
-        return (sourceY + 1.0F - EYE_UV_INSET) / SKIN_SIZE;
     }
 
     private static boolean shouldExtendSclera(int eyeWidth, int eyeHeight, boolean hurtSclera) {

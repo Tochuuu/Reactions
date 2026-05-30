@@ -72,9 +72,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         boolean animationsEnabled = isSelf ? config.animateSelf : config.animateOthers;
         boolean sleeping = state.hasPose(Pose.SLEEPING);
         boolean blinking = !sleeping && animationsEnabled && isBlinking(state, config);
-        boolean smoothStyle = config.animationStyle == ReactionsClientConfig.AnimationStyle.SMOOTH;
-        int mirroredEye = animationsEnabled && !blinking && !smoothStyle ? mirroredIdleEye(state) : 0;
-        float idleEyeOffset = animationsEnabled && !blinking && smoothStyle ? smoothIdleEyeOffset(state, config.movementPixels) : 0.0F;
+        int mirroredEye = animationsEnabled && !blinking ? mirroredIdleEye(state) : 0;
         HumanoidArm spyglassArm = spyglassUseArm(state);
         HumanoidArm bowArm = bowUseArm(state);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(state, bowArm);
@@ -91,8 +89,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         poseStack.pushPose();
         getParentModel().head.translateAndRotate(poseStack);
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
-        submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, idleEyeOffset, EyeSide.LEFT, hurtSclera);
-        submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, idleEyeOffset, EyeSide.RIGHT, hurtSclera);
+        submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, EyeSide.LEFT, hurtSclera);
+        submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, EyeSide.RIGHT, hurtSclera);
         if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, bufferSource, renderType, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
@@ -113,7 +111,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         poseStack.popPose();
     }
 
-    private static void submitEye(PoseStack poseStack, MultiBufferSource bufferSource, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, float eyeOffset, EyeSide side, boolean hurtSclera) {
+    private static void submitEye(PoseStack poseStack, MultiBufferSource bufferSource, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, EyeSide side, boolean hurtSclera) {
         int clampedSkinX = clamp(skinX, 0, (int) SKIN_SIZE - eyeWidth);
         int clampedSkinY = clamp(skinY, 0, (int) SKIN_SIZE - eyeHeight);
         int clampedEyelidSkinX = clamp(eyelidColorX, 0, (int) SKIN_SIZE - 1);
@@ -121,9 +119,6 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         float dstX1 = skinX - HEAD_FRONT_U - 4.0F;
         float dstY1 = skinY - HEAD_FRONT_V - 8.0F;
         float dstY2 = dstY1 + eyeHeight;
-        if (expression == EyeExpression.OPEN) {
-            dstX1 += eyeOffset;
-        }
 
         if (expression == EyeExpression.SQUINT) {
             submitSquintEye(poseStack, bufferSource, renderType, light, overlay, clampedSkinX, clampedSkinY, clampedEyelidSkinX, clampedEyelidSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, mirrored);
@@ -483,34 +478,6 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
             return 1;
         }
         return 0;
-    }
-
-    private static float smoothIdleEyeOffset(PlayerRenderState state, int movementPixels) {
-        if (state.walkAnimationSpeed > 0.01F || movementPixels <= 0) {
-            IDLE_STARTED_AT.remove(state.id);
-            return 0.0F;
-        }
-
-        float idleStartedAt = IDLE_STARTED_AT.computeIfAbsent(state.id, id -> state.ageInTicks);
-        int idleTicks = (int) (state.ageInTicks - idleStartedAt);
-        int cycleTick = Math.floorMod(idleTicks, IDLE_LOOK_CYCLE_TICKS);
-        if (cycleTick < IDLE_LOOK_DELAY_TICKS) {
-            return 0.0F;
-        }
-
-        int phase = cycleTick - IDLE_LOOK_DELAY_TICKS;
-        if (phase < IDLE_LOOK_STEP_TICKS) {
-            return -movementPixels * smoothPulse(phase);
-        }
-        if (phase < IDLE_LOOK_STEP_TICKS * 2) {
-            return movementPixels * smoothPulse(phase - IDLE_LOOK_STEP_TICKS);
-        }
-        return 0.0F;
-    }
-
-    private static float smoothPulse(int phase) {
-        float progress = Math.max(0.0F, Math.min(1.0F, phase / (float) IDLE_LOOK_STEP_TICKS));
-        return (float) Math.sin(progress * Math.PI);
     }
 
     private static RenderType renderType(ResourceLocation texture) {

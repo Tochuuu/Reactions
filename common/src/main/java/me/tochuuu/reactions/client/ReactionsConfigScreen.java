@@ -106,12 +106,6 @@ public final class ReactionsConfigScreen extends Screen {
         }).bounds(panelX, y, PANEL_WIDTH, 20).build());
 
         y += 24;
-        addRenderableWidget(Button.builder(animationStyleText(), button -> {
-            toggleAnimationStyle();
-            rebuildWidgets();
-        }).bounds(panelX, y, PANEL_WIDTH, 20).build());
-
-        y += 24;
         addRenderableWidget(Button.builder(Component.literal("Beta animations..."), button -> {
             if (this.minecraft != null) {
                 this.minecraft.setScreen(new ReactionsBetaAnimationsScreen(this));
@@ -192,12 +186,6 @@ public final class ReactionsConfigScreen extends Screen {
             ReactionsClientConfig.save();
             rebuildWidgets();
         }).bounds(rightX, y, buttonWidth, buttonHeight).build());
-
-        y += rowStep;
-        addRenderableWidget(Button.builder(animationStyleText(), button -> {
-            toggleAnimationStyle();
-            rebuildWidgets();
-        }).bounds(leftX, y, buttonWidth, buttonHeight).build());
 
         y += rowStep;
         addSizeButton(leftX, y, true, -1, buttonWidth, buttonHeight);
@@ -399,19 +387,6 @@ public final class ReactionsConfigScreen extends Screen {
 
     private Component mouthText() {
         return Component.literal("Mouth: " + onOff(ReactionsClientConfig.get().showMouth));
-    }
-
-    private Component animationStyleText() {
-        ReactionsClientConfig.AnimationStyle style = ReactionsClientConfig.get().animationStyle;
-        return Component.literal("Style: " + (style == ReactionsClientConfig.AnimationStyle.SMOOTH ? "Smooth" : "Blocky"));
-    }
-
-    private void toggleAnimationStyle() {
-        ReactionsClientConfig config = ReactionsClientConfig.get();
-        config.animationStyle = config.animationStyle == ReactionsClientConfig.AnimationStyle.SMOOTH
-            ? ReactionsClientConfig.AnimationStyle.BLOCKY
-            : ReactionsClientConfig.AnimationStyle.SMOOTH;
-        ReactionsClientConfig.save();
     }
 
     private Component modeText(EditMode targetMode) {

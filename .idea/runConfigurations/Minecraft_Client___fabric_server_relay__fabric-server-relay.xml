@@ -1,16 +1,23 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" factoryName="Application" name="Minecraft Client (:fabric-server-relay)" type="Application">
-    <option name="MAIN_CLASS_NAME" value="dev.architectury.transformer.TransformerRuntime"/>
-    <module name="reactions.fabric-server-relay.main"/>
-    <option name="PROGRAM_PARAMETERS" value=""/>
-    <option name="VM_PARAMETERS" value="-Dfabric.dli.config=C:\Users\antek\Documents\Projekty\MC@@0020Mods\Reactions\untitled\fabric-server-relay\.gradle\loom-cache\launch.cfg -Dfabric.dli.env=client -Dfabric.dli.main=net.fabricmc.loader.impl.launch.knot.KnotClient &quot;-Darchitectury.main.class=C:\Users\antek\Documents\Projekty\MC Mods\Reactions\untitled\fabric-server-relay\.gradle\architectury\.main_class&quot; &quot;-Darchitectury.runtime.transformer=C:\Users\antek\Documents\Projekty\MC Mods\Reactions\untitled\fabric-server-relay\.gradle\architectury\.transforms&quot; &quot;-Darchitectury.properties=C:\Users\antek\Documents\Projekty\MC Mods\Reactions\untitled\fabric-server-relay\.gradle\architectury\.properties&quot; -Djdk.attach.allowAttachSelf=true &quot;-javaagent:C:\Users\antek\Documents\Projekty\MC Mods\Reactions\untitled\.gradle\architectury\architectury-transformer-agent.jar&quot;"/>
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/fabric-server-relay/run/"/>
-    <method v="2">
-      <option enabled="true" name="Make"/>
-    </method>
-    <envs>
-      
-    </envs>
-    <shortenClasspath name="ARGS_FILE"/>
-  <classpathModifications/></configuration>
+  <configuration default="false" factoryName="Gradle" name="Minecraft Client (:fabric-server-relay)" type="GradleRunConfiguration">
+    <ExternalSystemSettings>
+      <option name="externalProjectPath" value="$PROJECT_DIR$" />
+      <option name="externalSystemIdString" value="GRADLE" />
+      <option name="scriptParameters" value="" />
+      <option name="taskDescriptions">
+        <list />
+      </option>
+      <option name="taskNames">
+        <list>
+          <option value=":fabric-server-relay:runClient" />
+        </list>
+      </option>
+      <option name="vmOptions" value="" />
+    </ExternalSystemSettings>
+    <ExternalSystemDebugServerProcess>true</ExternalSystemDebugServerProcess>
+    <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
+    <DebugAllEnabled>false</DebugAllEnabled>
+    <RunAsTest>false</RunAsTest>
+    <method v="2" />
+  </configuration>
 </component>

@@ -22,7 +22,7 @@ side = "CLIENT"
 [[dependencies.reactions]]
 modId = "minecraft"
 type = "required"
-versionRange = "[26.1,26.2)"
+versionRange = "[26.1,26.1.1)"
 ordering = "NONE"
 side = "CLIENT"
 

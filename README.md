@@ -25,7 +25,7 @@ Reactions brings player skins to life with customizable, vanilla-friendly facial
 - Expand configuration options.
 
 ## Requirements
-- **Minecraft:** Java Edition 26.1 - 26.1.1
+- **Minecraft:** Java Edition 26.1
 - **Platforms:** Fabric, NeoForge
 - **Java:** JDK 25+
 

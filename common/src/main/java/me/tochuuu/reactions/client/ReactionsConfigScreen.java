@@ -40,6 +40,7 @@ public final class ReactionsConfigScreen extends Screen {
     private int layoutButtonHeight = BUTTON_HEIGHT;
     private int sizeLimitMessageTicks;
     private boolean compactLayout;
+    private boolean denseLayout;
 
     public ReactionsConfigScreen(Screen parent) {
         super(Component.literal("Reactions"));
@@ -49,6 +50,7 @@ public final class ReactionsConfigScreen extends Screen {
     @Override
     protected void init() {
         layoutButtonHeight = BUTTON_HEIGHT;
+        denseLayout = false;
         compactLayout = this.width < PANEL_WIDTH + MIN_FACE_SIZE + 48 || this.height < 220;
         if (compactLayout) {
             initCompact();
@@ -59,11 +61,12 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     private void initSideBySide(boolean denseLayout) {
-        int buttonHeight = denseLayout ? 16 : BUTTON_HEIGHT;
-        int rowGap = denseLayout ? 3 : GAP;
-        int sectionGap = denseLayout ? 6 : 14;
-        int actionGap = denseLayout ? 6 : 18;
-        int doneY = denseLayout ? this.height - buttonHeight - 6 : this.height - 26;
+        this.denseLayout = denseLayout;
+        int buttonHeight = BUTTON_HEIGHT;
+        int rowGap = denseLayout ? 2 : GAP;
+        int sectionGap = denseLayout ? 4 : 14;
+        int actionGap = denseLayout ? 4 : 18;
+        int doneY = this.height - 26;
         int controlHeight = buttonHeight * 7 + rowGap * 4 + sectionGap + actionGap;
 
         layoutButtonHeight = buttonHeight;
@@ -268,7 +271,7 @@ public final class ReactionsConfigScreen extends Screen {
         drawPixelMarker(graphics, config.eyelidColorX, config.eyelidColorY, 0xFFFFC94A);
 
         int labelY = faceY + faceSize + 8;
-        if (!compactLayout) {
+        if (!compactLayout && !denseLayout) {
             graphics.drawString(this.font, Component.literal("Eyes " + config.eyeWidth + "x" + config.eyeHeight), faceX, labelY, 0xFFA0A0A0);
         }
         int rowTextOffset = Math.max(2, (layoutButtonHeight - 9) / 2);

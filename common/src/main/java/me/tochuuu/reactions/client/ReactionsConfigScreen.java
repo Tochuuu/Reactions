@@ -33,11 +33,9 @@ public final class ReactionsConfigScreen extends Screen {
     private int panelX;
     private int panelY;
     private int panelWidth;
-    private int partHeaderY;
     private int sizeHeaderY;
     private int eyeWidthRowY;
     private int eyeHeightRowY;
-    private int detailsY;
     private int sizeLimitMessageTicks;
     private boolean compactLayout;
 
@@ -48,33 +46,24 @@ public final class ReactionsConfigScreen extends Screen {
 
     @Override
     protected void init() {
-        compactLayout = this.width < 480 || this.height < 300;
+        compactLayout = this.width < BASE_FACE_SIZE + PANEL_WIDTH + 56 || this.height < 300;
         if (compactLayout) {
             initCompact();
             return;
         }
 
-        boolean stacked = this.width < BASE_FACE_SIZE + PANEL_WIDTH + 56;
-        int availableFaceWidth = stacked ? this.width - 24 : this.width - PANEL_WIDTH - 56;
-        int availableFaceHeight = stacked ? this.height - 250 : this.height - 86;
+        int availableFaceWidth = this.width - PANEL_WIDTH - 56;
+        int availableFaceHeight = this.height - 86;
         faceSize = clamp(Math.min(Math.min(BASE_FACE_SIZE, availableFaceWidth), availableFaceHeight), MIN_FACE_SIZE, BASE_FACE_SIZE);
         pixelSize = Math.max(1, faceSize / FACE_PIXELS);
         faceSize = pixelSize * FACE_PIXELS;
 
-        if (stacked) {
-            faceX = Math.max(12, this.width / 2 - faceSize / 2);
-            faceY = 32;
-            panelWidth = Math.min(PANEL_WIDTH, this.width - 24);
-            panelX = Math.max(12, this.width / 2 - panelWidth / 2);
-            panelY = faceY + faceSize + 42;
-        } else {
-            int contentWidth = faceSize + 28 + PANEL_WIDTH;
-            faceX = Math.max(12, this.width / 2 - contentWidth / 2);
-            faceY = Math.max(36, Math.min(this.height - faceSize - 52, this.height / 2 - faceSize / 2));
-            panelX = faceX + faceSize + 28;
-            panelY = faceY + 4;
-            panelWidth = PANEL_WIDTH;
-        }
+        int contentWidth = faceSize + 28 + PANEL_WIDTH;
+        faceX = Math.max(12, this.width / 2 - contentWidth / 2);
+        faceY = Math.max(36, Math.min(this.height - faceSize - 52, this.height / 2 - faceSize / 2));
+        panelX = faceX + faceSize + 28;
+        panelY = faceY + 4;
+        panelWidth = PANEL_WIDTH;
 
         int y = panelY;
         int half = (panelWidth - GAP) / 2;
@@ -85,8 +74,7 @@ public final class ReactionsConfigScreen extends Screen {
         addToggle(panelX, y, half, selfAnimationText(), () -> ReactionsClientConfig.get().animateSelf = !ReactionsClientConfig.get().animateSelf);
         addToggle(panelX + half + GAP, y, half, otherAnimationText(), () -> ReactionsClientConfig.get().animateOthers = !ReactionsClientConfig.get().animateOthers);
 
-        y += BUTTON_HEIGHT + 16;
-        partHeaderY = y - 10;
+        y += BUTTON_HEIGHT + GAP;
         addModeButton(EditMode.LEFT_EYE, panelX, y, half);
         addModeButton(EditMode.RIGHT_EYE, panelX + half + GAP, y, half);
 
@@ -94,7 +82,7 @@ public final class ReactionsConfigScreen extends Screen {
         addModeButton(EditMode.MOUTH, panelX, y, half);
         addModeButton(EditMode.EYEDROPPER, panelX + half + GAP, y, half);
 
-        y += BUTTON_HEIGHT + 18;
+        y += BUTTON_HEIGHT + 14;
         sizeHeaderY = y - 10;
         eyeWidthRowY = y;
         addSizeButton(panelX + panelWidth - 48, y, true, -1);
@@ -105,8 +93,7 @@ public final class ReactionsConfigScreen extends Screen {
         addSizeButton(panelX + panelWidth - 48, y, false, -1);
         addSizeButton(panelX + panelWidth - 22, y, false, 1);
 
-        detailsY = y + BUTTON_HEIGHT + 10;
-        int actionY = Math.min(this.height - 50, detailsY + 48);
+        int actionY = Math.min(this.height - 50, y + BUTTON_HEIGHT + 18);
         addRenderableWidget(Button.builder(Component.literal("Beta animations..."), button -> {
             if (this.minecraft != null) {
                 this.minecraft.setScreen(new ReactionsBetaAnimationsScreen(this));
@@ -164,7 +151,6 @@ public final class ReactionsConfigScreen extends Screen {
         eyeHeightRowY = y;
         addSizeButton(panelX + panelWidth - 48, y, false, -1, 18);
         addSizeButton(panelX + panelWidth - 22, y, false, 1, 18);
-        detailsY = 0;
 
         int bottomY = Math.min(this.height - 22, y + buttonHeight + 8);
         int third = Math.max(56, (panelWidth - GAP * 2) / 3);
@@ -238,7 +224,6 @@ public final class ReactionsConfigScreen extends Screen {
         super.render(graphics, mouseX, mouseY, partialTick);
 
         graphics.drawString(this.font, this.title, this.width / 2 - this.font.width(this.title) / 2, 12, 0xFFFFFFFF);
-        graphics.drawString(this.font, Component.literal("Skin UV picker"), faceX, faceY - 12, 0xFFA0A0A0);
 
         ResourceLocation texture = skinTexture();
         graphics.blit(texture, faceX, faceY, faceSize, faceSize, FACE_U, FACE_V, FACE_PIXELS, FACE_PIXELS, SKIN_SIZE, SKIN_SIZE);
@@ -249,29 +234,13 @@ public final class ReactionsConfigScreen extends Screen {
         drawPixelMarker(graphics, config.eyelidColorX, config.eyelidColorY, 0xFFFFC94A);
 
         int labelY = faceY + faceSize + 8;
-        graphics.drawString(this.font, Component.literal("Editing: " + mode.label), faceX, labelY, mode.color);
-        if (!compactLayout) {
-            graphics.drawString(this.font, Component.literal("Eyes " + config.eyeWidth + "x" + config.eyeHeight), faceX, labelY + 11, 0xFFA0A0A0);
-        }
-
-        if (!compactLayout) {
-            graphics.drawString(this.font, Component.literal("Animation"), panelX, panelY - 11, 0xFFA0A0A0);
-        }
-        graphics.drawString(this.font, Component.literal("UV parts"), panelX, partHeaderY, 0xFFA0A0A0);
+        graphics.drawString(this.font, Component.literal("Eyes " + config.eyeWidth + "x" + config.eyeHeight), faceX, labelY, 0xFFA0A0A0);
         graphics.drawString(this.font, Component.literal("Eye size"), panelX, sizeHeaderY, 0xFFA0A0A0);
         graphics.drawString(this.font, Component.literal("Width: " + config.eyeWidth), panelX, eyeWidthRowY + 6, 0xFFFFFFFF);
         graphics.drawString(this.font, Component.literal("Height: " + config.eyeHeight), panelX, eyeHeightRowY + 6, 0xFFFFFFFF);
 
-        if (!compactLayout && detailsY > 0 && detailsY < this.height - 46) {
-            graphics.drawString(this.font, Component.literal("Left eye: " + uv(config.leftEyeX, config.leftEyeY)), panelX, detailsY, 0xFF43D17C);
-            graphics.drawString(this.font, Component.literal("Right eye: " + uv(config.rightEyeX, config.rightEyeY)), panelX, detailsY + 11, 0xFF4AA3FF);
-            graphics.drawString(this.font, Component.literal("Mouth: " + uv(config.leftMouthX, config.leftMouthY) + " " + uv(config.rightMouthX, config.rightMouthY)), panelX, detailsY + 22, 0xFFFFD45A);
-            graphics.drawString(this.font, Component.literal("Eyelid: " + uv(config.eyelidColorX, config.eyelidColorY)), panelX, detailsY + 33, 0xFFFFC94A);
-        }
-
         if (sizeLimitMessageTicks > 0) {
-            int messageY = compactLayout ? Math.max(20, panelY - 12) : Math.min(this.height - 38, detailsY + 46);
-            graphics.drawString(this.font, Component.literal("Eye size limit reached"), panelX, messageY, 0xFFFF6060);
+            graphics.drawString(this.font, Component.literal("Eye size limit reached"), panelX, Math.min(this.height - 38, eyeHeightRowY + BUTTON_HEIGHT + 6), 0xFFFF6060);
         }
     }
 
@@ -381,10 +350,6 @@ public final class ReactionsConfigScreen extends Screen {
 
     private Component modeText(EditMode targetMode) {
         return Component.literal((mode == targetMode ? "> " : "") + (compactLayout ? targetMode.shortLabel : targetMode.label));
-    }
-
-    private static String uv(int x, int y) {
-        return x + "," + y;
     }
 
     private static String onOff(boolean enabled) {

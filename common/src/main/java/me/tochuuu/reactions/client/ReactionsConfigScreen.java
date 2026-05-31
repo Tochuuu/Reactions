@@ -48,69 +48,88 @@ public final class ReactionsConfigScreen extends Screen {
     @Override
     protected void init() {
         layoutButtonHeight = BUTTON_HEIGHT;
-        compactLayout = this.width < BASE_FACE_SIZE + PANEL_WIDTH + 52 || this.height < 260;
+        compactLayout = this.width < PANEL_WIDTH + MIN_FACE_SIZE + 48 || this.height < 220;
         if (compactLayout) {
             initCompact();
             return;
         }
 
+        initSideBySide(this.height < 260);
+    }
+
+    private void initSideBySide(boolean denseLayout) {
+        int buttonHeight = denseLayout ? 16 : BUTTON_HEIGHT;
+        int rowGap = denseLayout ? 3 : GAP;
+        int sectionGap = denseLayout ? 6 : 14;
+        int actionGap = denseLayout ? 6 : 18;
+        int doneY = denseLayout ? this.height - buttonHeight - 6 : this.height - 26;
+        int controlHeight = buttonHeight * 7 + rowGap * 4 + sectionGap + actionGap;
+
+        layoutButtonHeight = buttonHeight;
         int availableFaceWidth = this.width - PANEL_WIDTH - 52;
-        int availableFaceHeight = this.height - 78;
+        int availableFaceHeight = this.height - (denseLayout ? 56 : 78);
         faceSize = clamp(Math.min(Math.min(BASE_FACE_SIZE, availableFaceWidth), availableFaceHeight), MIN_FACE_SIZE, BASE_FACE_SIZE);
         pixelSize = Math.max(1, faceSize / FACE_PIXELS);
         faceSize = pixelSize * FACE_PIXELS;
 
         int contentWidth = faceSize + 24 + PANEL_WIDTH;
         faceX = Math.max(12, this.width / 2 - contentWidth / 2);
-        faceY = Math.max(36, Math.min(this.height - faceSize - 52, this.height / 2 - faceSize / 2));
+        if (denseLayout) {
+            int minPanelY = 28;
+            int maxPanelY = Math.max(minPanelY, doneY - controlHeight - 8);
+            panelY = clamp(this.height / 2 - controlHeight / 2, minPanelY, maxPanelY);
+            faceY = clamp(panelY + controlHeight / 2 - faceSize / 2, 28, Math.max(28, this.height - faceSize - buttonHeight - 10));
+        } else {
+            faceY = Math.max(36, Math.min(this.height - faceSize - 52, this.height / 2 - faceSize / 2));
+            panelY = faceY + 4;
+        }
         panelX = faceX + faceSize + 24;
-        panelY = faceY + 4;
         panelWidth = PANEL_WIDTH;
 
         int y = panelY;
         int half = (panelWidth - GAP) / 2;
-        addToggle(panelX, y, half, enabledText(), () -> ReactionsClientConfig.get().enabled = !ReactionsClientConfig.get().enabled);
-        addToggle(panelX + half + GAP, y, half, mouthText(), () -> ReactionsClientConfig.get().showMouth = !ReactionsClientConfig.get().showMouth);
+        addToggle(panelX, y, half, enabledText(), () -> ReactionsClientConfig.get().enabled = !ReactionsClientConfig.get().enabled, buttonHeight);
+        addToggle(panelX + half + GAP, y, half, mouthText(), () -> ReactionsClientConfig.get().showMouth = !ReactionsClientConfig.get().showMouth, buttonHeight);
 
-        y += BUTTON_HEIGHT + GAP;
-        addToggle(panelX, y, half, selfAnimationText(), () -> ReactionsClientConfig.get().animateSelf = !ReactionsClientConfig.get().animateSelf);
-        addToggle(panelX + half + GAP, y, half, otherAnimationText(), () -> ReactionsClientConfig.get().animateOthers = !ReactionsClientConfig.get().animateOthers);
+        y += buttonHeight + rowGap;
+        addToggle(panelX, y, half, selfAnimationText(), () -> ReactionsClientConfig.get().animateSelf = !ReactionsClientConfig.get().animateSelf, buttonHeight);
+        addToggle(panelX + half + GAP, y, half, otherAnimationText(), () -> ReactionsClientConfig.get().animateOthers = !ReactionsClientConfig.get().animateOthers, buttonHeight);
 
-        y += BUTTON_HEIGHT + GAP;
-        addModeButton(EditMode.LEFT_EYE, panelX, y, half);
-        addModeButton(EditMode.RIGHT_EYE, panelX + half + GAP, y, half);
+        y += buttonHeight + rowGap;
+        addModeButton(EditMode.LEFT_EYE, panelX, y, half, buttonHeight);
+        addModeButton(EditMode.RIGHT_EYE, panelX + half + GAP, y, half, buttonHeight);
 
-        y += BUTTON_HEIGHT + GAP;
-        addModeButton(EditMode.MOUTH, panelX, y, half);
-        addModeButton(EditMode.EYEDROPPER, panelX + half + GAP, y, half);
+        y += buttonHeight + rowGap;
+        addModeButton(EditMode.MOUTH, panelX, y, half, buttonHeight);
+        addModeButton(EditMode.EYEDROPPER, panelX + half + GAP, y, half, buttonHeight);
 
-        y += BUTTON_HEIGHT + 14;
-        sizeHeaderY = y - 10;
+        y += buttonHeight + sectionGap;
+        sizeHeaderY = y - Math.max(4, sectionGap);
         eyeWidthRowY = y;
-        addSizeButton(panelX + panelWidth - 48, y, true, -1);
-        addSizeButton(panelX + panelWidth - 22, y, true, 1);
+        addSizeButton(panelX + panelWidth - buttonHeight * 2 - 6, y, true, -1, buttonHeight);
+        addSizeButton(panelX + panelWidth - buttonHeight, y, true, 1, buttonHeight);
 
-        y += BUTTON_HEIGHT + GAP;
+        y += buttonHeight + rowGap;
         eyeHeightRowY = y;
-        addSizeButton(panelX + panelWidth - 48, y, false, -1);
-        addSizeButton(panelX + panelWidth - 22, y, false, 1);
+        addSizeButton(panelX + panelWidth - buttonHeight * 2 - 6, y, false, -1, buttonHeight);
+        addSizeButton(panelX + panelWidth - buttonHeight, y, false, 1, buttonHeight);
 
-        int actionY = Math.min(this.height - 50, y + BUTTON_HEIGHT + 18);
+        int actionY = denseLayout ? y + buttonHeight + actionGap : Math.min(this.height - 50, y + buttonHeight + actionGap);
         addRenderableWidget(Button.builder(Component.literal("Beta"), button -> {
             if (this.minecraft != null) {
                 this.minecraft.setScreen(new ReactionsBetaAnimationsScreen(this));
             }
-        }).bounds(panelX, actionY, half, BUTTON_HEIGHT).build());
+        }).bounds(panelX, actionY, half, buttonHeight).build());
         addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
             ReactionsClientConfig.reset();
             mode = EditMode.LEFT_EYE;
             rebuildWidgets();
-        }).bounds(panelX + half + GAP, actionY, half, BUTTON_HEIGHT).build());
+        }).bounds(panelX + half + GAP, actionY, half, buttonHeight).build());
 
         addRenderableWidget(Button.builder(Component.literal("Done"), button -> {
             ReactionsClientConfig.save();
             onClose();
-        }).bounds(this.width / 2 - 48, this.height - 26, 96, BUTTON_HEIGHT).build());
+        }).bounds(this.width / 2 - 48, doneY, 96, buttonHeight).build());
     }
 
     private void initCompact() {

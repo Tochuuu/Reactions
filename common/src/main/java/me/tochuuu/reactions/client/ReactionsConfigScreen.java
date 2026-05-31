@@ -37,6 +37,7 @@ public final class ReactionsConfigScreen extends Screen {
     private int sizeHeaderY;
     private int eyeWidthRowY;
     private int eyeHeightRowY;
+    private int layoutButtonHeight = BUTTON_HEIGHT;
     private int sizeLimitMessageTicks;
     private boolean compactLayout;
 
@@ -47,6 +48,7 @@ public final class ReactionsConfigScreen extends Screen {
 
     @Override
     protected void init() {
+        layoutButtonHeight = BUTTON_HEIGHT;
         compactLayout = this.width < BASE_FACE_SIZE + PANEL_WIDTH + 52 || this.height < 260;
         if (compactLayout) {
             initCompact();
@@ -113,48 +115,60 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     private void initCompact() {
-        faceSize = Math.min(COMPACT_FACE_SIZE, Math.max(40, Math.min(this.width - 24, this.height - 170)));
+        boolean ultraCompact = this.height < 180;
+        boolean shortWindow = this.height < 232;
+        int buttonHeight = ultraCompact ? 12 : shortWindow ? 14 : 16;
+        int rowGap = ultraCompact ? 1 : shortWindow ? 2 : 3;
+        int topY = ultraCompact ? 12 : shortWindow ? 18 : 24;
+        int faceGap = ultraCompact ? 4 : shortWindow ? 8 : 16;
+        int maxFaceSize = ultraCompact ? 24 : shortWindow ? 32 : COMPACT_FACE_SIZE;
+        int minFaceSize = ultraCompact ? 16 : shortWindow ? 24 : 40;
+        int sizeGap = ultraCompact ? 4 : 7;
+        int actionGap = ultraCompact ? 1 : shortWindow ? 3 : 6;
+        int controlsHeight = buttonHeight * 7 + rowGap * 4 + sizeGap + actionGap;
+
+        faceSize = Math.min(maxFaceSize, Math.max(minFaceSize, Math.min(this.width - 24, this.height - topY - faceGap - controlsHeight - 4)));
         pixelSize = Math.max(1, faceSize / FACE_PIXELS);
         faceSize = pixelSize * FACE_PIXELS;
         faceX = Math.max(8, this.width / 2 - faceSize / 2);
-        faceY = 24;
+        faceY = topY;
 
-        panelWidth = Math.min(280, this.width - 16);
+        panelWidth = Math.min(shortWindow ? 240 : 280, this.width - 16);
         panelX = Math.max(8, this.width / 2 - panelWidth / 2);
-        panelY = faceY + faceSize + 16;
+        panelY = faceY + faceSize + faceGap;
 
-        int buttonHeight = 16;
+        layoutButtonHeight = buttonHeight;
         int half = (panelWidth - GAP) / 2;
         int y = panelY;
 
         addToggle(panelX, y, half, enabledText(), () -> ReactionsClientConfig.get().enabled = !ReactionsClientConfig.get().enabled, buttonHeight);
         addToggle(panelX + half + GAP, y, half, mouthText(), () -> ReactionsClientConfig.get().showMouth = !ReactionsClientConfig.get().showMouth, buttonHeight);
 
-        y += buttonHeight + 3;
+        y += buttonHeight + rowGap;
         addModeButton(EditMode.LEFT_EYE, panelX, y, half, buttonHeight);
         addModeButton(EditMode.RIGHT_EYE, panelX + half + GAP, y, half, buttonHeight);
 
-        y += buttonHeight + 3;
+        y += buttonHeight + rowGap;
         addModeButton(EditMode.MOUTH, panelX, y, half, buttonHeight);
         addModeButton(EditMode.EYEDROPPER, panelX + half + GAP, y, half, buttonHeight);
 
-        y += buttonHeight + 3;
+        y += buttonHeight + rowGap;
         addToggle(panelX, y, half, selfAnimationText(), () -> ReactionsClientConfig.get().animateSelf = !ReactionsClientConfig.get().animateSelf, buttonHeight);
         addToggle(panelX + half + GAP, y, half, otherAnimationText(), () -> ReactionsClientConfig.get().animateOthers = !ReactionsClientConfig.get().animateOthers, buttonHeight);
 
-        y += buttonHeight + 7;
-        sizeHeaderY = y - 7;
+        y += buttonHeight + sizeGap;
+        sizeHeaderY = y - Math.max(4, sizeGap);
         eyeWidthRowY = y;
-        addSizeButton(panelX + panelWidth - 42, y, true, -1, 16);
-        addSizeButton(panelX + panelWidth - 20, y, true, 1, 16);
+        addSizeButton(panelX + panelWidth - buttonHeight * 2 - 6, y, true, -1, buttonHeight);
+        addSizeButton(panelX + panelWidth - buttonHeight, y, true, 1, buttonHeight);
 
-        y += buttonHeight + 3;
+        y += buttonHeight + rowGap;
         eyeHeightRowY = y;
-        addSizeButton(panelX + panelWidth - 42, y, false, -1, 16);
-        addSizeButton(panelX + panelWidth - 20, y, false, 1, 16);
+        addSizeButton(panelX + panelWidth - buttonHeight * 2 - 6, y, false, -1, buttonHeight);
+        addSizeButton(panelX + panelWidth - buttonHeight, y, false, 1, buttonHeight);
 
-        int bottomY = Math.min(this.height - 20, y + buttonHeight + 6);
-        int third = Math.max(56, (panelWidth - GAP * 2) / 3);
+        int bottomY = y + buttonHeight + actionGap;
+        int third = Math.max(1, (panelWidth - GAP * 2) / 3);
         addRenderableWidget(Button.builder(Component.literal("Beta"), button -> {
             if (this.minecraft != null) {
                 this.minecraft.setScreen(new ReactionsBetaAnimationsScreen(this));
@@ -235,13 +249,16 @@ public final class ReactionsConfigScreen extends Screen {
         drawPixelMarker(graphics, config.eyelidColorX, config.eyelidColorY, 0xFFFFC94A);
 
         int labelY = faceY + faceSize + 8;
-        graphics.drawString(this.font, Component.literal("Eyes " + config.eyeWidth + "x" + config.eyeHeight), faceX, labelY, 0xFFA0A0A0);
+        if (!compactLayout) {
+            graphics.drawString(this.font, Component.literal("Eyes " + config.eyeWidth + "x" + config.eyeHeight), faceX, labelY, 0xFFA0A0A0);
+        }
+        int rowTextOffset = Math.max(2, (layoutButtonHeight - 9) / 2);
         graphics.drawString(this.font, Component.literal("Eye size"), panelX, sizeHeaderY, 0xFFA0A0A0);
-        graphics.drawString(this.font, Component.literal("Width: " + config.eyeWidth), panelX, eyeWidthRowY + 6, 0xFFFFFFFF);
-        graphics.drawString(this.font, Component.literal("Height: " + config.eyeHeight), panelX, eyeHeightRowY + 6, 0xFFFFFFFF);
+        graphics.drawString(this.font, Component.literal("Width: " + config.eyeWidth), panelX, eyeWidthRowY + rowTextOffset, 0xFFFFFFFF);
+        graphics.drawString(this.font, Component.literal("Height: " + config.eyeHeight), panelX, eyeHeightRowY + rowTextOffset, 0xFFFFFFFF);
 
         if (sizeLimitMessageTicks > 0) {
-            graphics.drawString(this.font, Component.literal("Eye size limit reached"), panelX, Math.min(this.height - 38, eyeHeightRowY + BUTTON_HEIGHT + 6), 0xFFFF6060);
+            graphics.drawString(this.font, Component.literal("Eye size limit reached"), panelX, Math.min(this.height - 38, eyeHeightRowY + layoutButtonHeight + 4), 0xFFFF6060);
         }
     }
 

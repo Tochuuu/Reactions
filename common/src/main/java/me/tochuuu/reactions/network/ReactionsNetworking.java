@@ -24,15 +24,12 @@ public final class ReactionsNetworking {
     private static final ResourceLocation EYE_FOCUS_S2C = ResourceLocation.fromNamespaceAndPath(Reactions.MOD_ID, "eye_focus_s2c");
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
-    public static final int EYE_FOCUS_NONE = 0;
-    public static final int EYE_FOCUS_BLOCK = 1;
-    public static final int EYE_FOCUS_ENTITY = 2;
     private static final int CLIENT_SYNC_RETRY_TICKS = 20 * 30;
     private static final int SERVER_SYNC_RETRY_TICKS = 20 * 30;
     private static final Map<Integer, RemoteEyeConfig> CLIENT_CONFIGS = new HashMap<>();
     private static final Map<UUID, RemoteEyeConfig> CLIENT_CONFIGS_BY_UUID = new HashMap<>();
-    private static final Map<Integer, RemoteEyeFocus> CLIENT_EYE_FOCUSES = new HashMap<>();
-    private static final Map<UUID, RemoteEyeFocus> CLIENT_EYE_FOCUSES_BY_UUID = new HashMap<>();
+    private static final Map<Integer, Integer> CLIENT_EYE_FOCUSES = new HashMap<>();
+    private static final Map<UUID, Integer> CLIENT_EYE_FOCUSES_BY_UUID = new HashMap<>();
     private static final Map<UUID, RemoteEyeConfig> SERVER_CONFIGS = new HashMap<>();
     private static final Map<UUID, EyeFocusState> SERVER_EYE_FOCUSES = new HashMap<>();
     private static final Map<UUID, Integer> SERVER_PENDING_SYNC = new HashMap<>();
@@ -64,13 +61,12 @@ public final class ReactionsNetworking {
 
     public static void handleServerboundEyeFocus(EyeFocusC2SPayload payload, ServerPlayer serverPlayer) {
         int focus = clamp(payload.focus(), -100, 100);
-        int mode = clampFocusMode(payload.mode());
-        if (focus == 0 || mode == EYE_FOCUS_NONE) {
+        if (focus == 0) {
             SERVER_EYE_FOCUSES.remove(serverPlayer.getUUID());
         } else {
-            SERVER_EYE_FOCUSES.put(serverPlayer.getUUID(), new EyeFocusState(serverPlayer.getUUID(), serverPlayer.getId(), focus, mode));
+            SERVER_EYE_FOCUSES.put(serverPlayer.getUUID(), new EyeFocusState(serverPlayer.getUUID(), serverPlayer.getId(), focus));
         }
-        sendEyeFocusToReceivers(serverPlayer, focus, mode);
+        sendEyeFocusToReceivers(serverPlayer, focus);
     }
 
     public static void handleClientboundConfig(EyeConfigS2CPayload payload) {
@@ -83,7 +79,7 @@ public final class ReactionsNetworking {
 
     public static void handleClientboundEyeFocus(EyeFocusS2CPayload payload) {
         if (payload.action() == UPDATE) {
-            applyRemoteEyeFocus(payload.playerId(), payload.entityId(), payload.focus(), payload.mode());
+            applyRemoteEyeFocus(payload.playerId(), payload.entityId(), payload.focus());
         } else if (payload.action() == REMOVE && payload.playerId() != null) {
             removeRemoteEyeFocus(payload.playerId());
         }
@@ -155,9 +151,9 @@ public final class ReactionsNetworking {
     }
 
     public static int remoteEyeFocus(int entityId) {
-        RemoteEyeFocus focus = CLIENT_EYE_FOCUSES.get(entityId);
+        Integer focus = CLIENT_EYE_FOCUSES.get(entityId);
         if (focus != null) {
-            return focus.focus();
+            return focus;
         }
 
         Minecraft minecraft = Minecraft.getInstance();
@@ -170,34 +166,11 @@ public final class ReactionsNetworking {
                 focus = CLIENT_EYE_FOCUSES_BY_UUID.get(player.getUUID());
                 if (focus != null) {
                     CLIENT_EYE_FOCUSES.put(entityId, focus);
-                    return focus.focus();
+                    return focus;
                 }
             }
         }
         return 0;
-    }
-
-    public static int remoteEyeFocusMode(int entityId) {
-        RemoteEyeFocus focus = CLIENT_EYE_FOCUSES.get(entityId);
-        if (focus != null) {
-            return focus.mode();
-        }
-
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
-            return EYE_FOCUS_NONE;
-        }
-
-        for (Player player : minecraft.level.players()) {
-            if (player.getId() == entityId) {
-                focus = CLIENT_EYE_FOCUSES_BY_UUID.get(player.getUUID());
-                if (focus != null) {
-                    CLIENT_EYE_FOCUSES.put(entityId, focus);
-                    return focus.mode();
-                }
-            }
-        }
-        return EYE_FOCUS_NONE;
     }
 
     public static boolean hasServerConfig(UUID playerId) {
@@ -220,12 +193,11 @@ public final class ReactionsNetworking {
         requestLocalConfigSync();
     }
 
-    public static void sendLocalEyeFocus(int focus, int mode) {
+    public static void sendLocalEyeFocus(int focus) {
         int clampedFocus = clamp(focus, -100, 100);
-        int clampedMode = clampFocusMode(mode);
-        syncIntegratedServerHostEyeFocus(clampedFocus, clampedMode);
+        syncIntegratedServerHostEyeFocus(clampedFocus);
         if (platform != null && platform.canSendEyeFocusToServer()) {
-            platform.sendEyeFocusToServer(new EyeFocusC2SPayload(clampedFocus, clampedMode));
+            platform.sendEyeFocusToServer(new EyeFocusC2SPayload(clampedFocus));
         }
     }
 
@@ -291,7 +263,7 @@ public final class ReactionsNetworking {
         sendUpdateToReceivers(host, hostConfig);
     }
 
-    private static void syncIntegratedServerHostEyeFocus(int focus, int mode) {
+    private static void syncIntegratedServerHostEyeFocus(int focus) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null || minecraft.getSingleplayerServer() == null) {
             return;
@@ -309,18 +281,18 @@ public final class ReactionsNetworking {
         }
 
         EyeFocusState current = SERVER_EYE_FOCUSES.get(host.getUUID());
-        if (focus == 0 || mode == EYE_FOCUS_NONE) {
+        if (focus == 0) {
             if (current == null) {
                 return;
             }
             SERVER_EYE_FOCUSES.remove(host.getUUID());
         } else {
-            if (current != null && current.focus() == focus && current.mode() == mode && current.entityId() == host.getId()) {
+            if (current != null && current.focus() == focus && current.entityId() == host.getId()) {
                 return;
             }
-            SERVER_EYE_FOCUSES.put(host.getUUID(), new EyeFocusState(host.getUUID(), host.getId(), focus, mode));
+            SERVER_EYE_FOCUSES.put(host.getUUID(), new EyeFocusState(host.getUUID(), host.getId(), focus));
         }
-        sendEyeFocusToReceivers(host, focus, mode);
+        sendEyeFocusToReceivers(host, focus);
     }
 
     private static void retryServerSync(MinecraftServer server) {
@@ -393,10 +365,10 @@ public final class ReactionsNetworking {
         }
     }
 
-    private static void sendEyeFocusToReceivers(ServerPlayer source, int focus, int mode) {
+    private static void sendEyeFocusToReceivers(ServerPlayer source, int focus) {
         for (ServerPlayer player : source.level().getServer().getPlayerList().getPlayers()) {
             if (canSendEyeFocusToPlayer(player)) {
-                if (!trySendEyeFocus(player, source.getUUID(), source.getId(), focus, mode)) {
+                if (!trySendEyeFocus(player, source.getUUID(), source.getId(), focus)) {
                     queueServerSync(player);
                 }
             } else {
@@ -431,15 +403,15 @@ public final class ReactionsNetworking {
     }
 
     private static boolean trySendEyeFocusUpdate(ServerPlayer player, EyeFocusState focus) {
-        return trySendEyeFocus(player, focus.playerId(), focus.entityId(), focus.focus(), focus.mode());
+        return trySendEyeFocus(player, focus.playerId(), focus.entityId(), focus.focus());
     }
 
-    private static boolean trySendEyeFocus(ServerPlayer player, UUID sourcePlayerId, int sourceEntityId, int focus, int mode) {
+    private static boolean trySendEyeFocus(ServerPlayer player, UUID sourcePlayerId, int sourceEntityId, int focus) {
         try {
-            if (focus == 0 || mode == EYE_FOCUS_NONE) {
+            if (focus == 0) {
                 platform.sendEyeFocusToPlayer(player, EyeFocusS2CPayload.remove(sourcePlayerId));
             } else {
-                platform.sendEyeFocusToPlayer(player, EyeFocusS2CPayload.update(sourcePlayerId, sourceEntityId, focus, mode));
+                platform.sendEyeFocusToPlayer(player, EyeFocusS2CPayload.update(sourcePlayerId, sourceEntityId, focus));
             }
             return true;
         } catch (RuntimeException ignored) {
@@ -575,17 +547,15 @@ public final class ReactionsNetworking {
         CLIENT_CONFIGS.entrySet().removeIf(entry -> playerId.equals(entry.getValue().playerId()));
     }
 
-    private static void applyRemoteEyeFocus(UUID playerId, int entityId, int focus, int mode) {
+    private static void applyRemoteEyeFocus(UUID playerId, int entityId, int focus) {
         int clampedFocus = clamp(focus, -100, 100);
-        int clampedMode = clampFocusMode(mode);
-        if (clampedFocus == 0 || clampedMode == EYE_FOCUS_NONE) {
+        if (clampedFocus == 0) {
             removeRemoteEyeFocus(playerId);
             return;
         }
-        RemoteEyeFocus state = new RemoteEyeFocus(clampedFocus, clampedMode);
-        CLIENT_EYE_FOCUSES.put(entityId, state);
+        CLIENT_EYE_FOCUSES.put(entityId, clampedFocus);
         if (playerId != null) {
-            CLIENT_EYE_FOCUSES_BY_UUID.put(playerId, state);
+            CLIENT_EYE_FOCUSES_BY_UUID.put(playerId, clampedFocus);
         }
     }
 
@@ -609,14 +579,7 @@ public final class ReactionsNetworking {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static int clampFocusMode(int mode) {
-        return mode == EYE_FOCUS_BLOCK || mode == EYE_FOCUS_ENTITY ? mode : EYE_FOCUS_NONE;
-    }
-
-    private record RemoteEyeFocus(int focus, int mode) {
-    }
-
-    private record EyeFocusState(UUID playerId, int entityId, int focus, int mode) {
+    private record EyeFocusState(UUID playerId, int entityId, int focus) {
     }
 
     public interface Platform {
@@ -690,19 +653,16 @@ public final class ReactionsNetworking {
         }
     }
 
-    public record EyeFocusC2SPayload(int focus, int mode) implements CustomPacketPayload {
+    public record EyeFocusC2SPayload(int focus) implements CustomPacketPayload {
         public static final Type<EyeFocusC2SPayload> TYPE = new Type<>(EYE_FOCUS_C2S);
         public static final StreamCodec<RegistryFriendlyByteBuf, EyeFocusC2SPayload> STREAM_CODEC = StreamCodec.ofMember(EyeFocusC2SPayload::write, EyeFocusC2SPayload::read);
 
         private static EyeFocusC2SPayload read(RegistryFriendlyByteBuf buf) {
-            int focus = buf.readByte();
-            int mode = buf.readableBytes() > 0 ? buf.readUnsignedByte() : EYE_FOCUS_BLOCK;
-            return new EyeFocusC2SPayload(focus, mode);
+            return new EyeFocusC2SPayload(buf.readByte());
         }
 
         private void write(RegistryFriendlyByteBuf buf) {
             buf.writeByte(clamp(focus, -100, 100));
-            buf.writeByte(clampFocusMode(mode));
         }
 
         @Override
@@ -711,26 +671,23 @@ public final class ReactionsNetworking {
         }
     }
 
-    public record EyeFocusS2CPayload(int action, UUID playerId, int entityId, int focus, int mode) implements CustomPacketPayload {
+    public record EyeFocusS2CPayload(int action, UUID playerId, int entityId, int focus) implements CustomPacketPayload {
         public static final Type<EyeFocusS2CPayload> TYPE = new Type<>(EYE_FOCUS_S2C);
         public static final StreamCodec<RegistryFriendlyByteBuf, EyeFocusS2CPayload> STREAM_CODEC = StreamCodec.ofMember(EyeFocusS2CPayload::write, EyeFocusS2CPayload::read);
 
-        public static EyeFocusS2CPayload update(UUID playerId, int entityId, int focus, int mode) {
-            return new EyeFocusS2CPayload(UPDATE, playerId, entityId, clamp(focus, -100, 100), clampFocusMode(mode));
+        public static EyeFocusS2CPayload update(UUID playerId, int entityId, int focus) {
+            return new EyeFocusS2CPayload(UPDATE, playerId, entityId, clamp(focus, -100, 100));
         }
 
         public static EyeFocusS2CPayload remove(UUID playerId) {
-            return new EyeFocusS2CPayload(REMOVE, playerId, 0, 0, EYE_FOCUS_NONE);
+            return new EyeFocusS2CPayload(REMOVE, playerId, 0, 0);
         }
 
         private static EyeFocusS2CPayload read(RegistryFriendlyByteBuf buf) {
             int action = buf.readUnsignedByte();
             UUID playerId = buf.readUUID();
             if (action == UPDATE) {
-                int entityId = buf.readVarInt();
-                int focus = buf.readByte();
-                int mode = buf.readableBytes() > 0 ? buf.readUnsignedByte() : EYE_FOCUS_BLOCK;
-                return update(playerId, entityId, focus, mode);
+                return update(playerId, buf.readVarInt(), buf.readByte());
             }
             return remove(playerId);
         }
@@ -741,7 +698,6 @@ public final class ReactionsNetworking {
             if (action == UPDATE) {
                 buf.writeVarInt(entityId);
                 buf.writeByte(focus);
-                buf.writeByte(mode);
             }
         }
 

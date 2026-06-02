@@ -43,7 +43,6 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final java.util.Map<Integer, DamageEyeReaction> DAMAGE_REACTIONS = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> LAST_DAMAGE_REACTIONS = new java.util.HashMap<>();
     private static final java.util.Map<Integer, Integer> DAMAGE_REACTION_STREAKS = new java.util.HashMap<>();
-    private static final java.util.Map<Integer, Integer> ENTITY_FOCUS_EYES = new java.util.HashMap<>();
 
     public PlayerEyeRenderLayer(RenderLayerParent<AvatarRenderState, PlayerModel> parent) {
         super(parent);
@@ -77,8 +76,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         boolean animationsEnabled = isSelf ? config.animateSelf : config.animateOthers;
         boolean sleeping = state.hasPose(Pose.SLEEPING);
         boolean blinking = !sleeping && animationsEnabled && isBlinking(state, config);
-        int focusEye = animationsEnabled ? focusEye(state.id, isSelf, blinking) : 0;
-        int mirroredEye = animationsEnabled && !blinking ? focusEye != 0 ? focusEye : mirroredIdleEye(state) : 0;
+        int blockFocusEye = animationsEnabled && !blinking ? blockFocusEye(state.id, isSelf) : 0;
+        int mirroredEye = animationsEnabled && !blinking ? blockFocusEye != 0 ? blockFocusEye : mirroredIdleEye(state) : 0;
         HumanoidArm spyglassArm = spyglassUseArm(state);
         HumanoidArm bowArm = bowUseArm(state);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(state, bowArm);
@@ -508,21 +507,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return 0;
     }
 
-    private static int focusEye(int entityId, boolean isSelf, boolean blinking) {
-        int mode = isSelf ? BlockInteractionEyeFocus.localFocusMode() : ReactionsNetworking.remoteEyeFocusMode(entityId);
+    private static int blockFocusEye(int entityId, boolean isSelf) {
         float focus = isSelf ? BlockInteractionEyeFocus.localFocusAmount() : ReactionsNetworking.remoteEyeFocus(entityId) / 100.0F;
-        int targetEye = focusToEye(focus);
-        if (mode == ReactionsNetworking.EYE_FOCUS_BLOCK) {
-            ENTITY_FOCUS_EYES.remove(entityId);
-            return targetEye;
-        }
-        if (mode == ReactionsNetworking.EYE_FOCUS_ENTITY || ENTITY_FOCUS_EYES.containsKey(entityId)) {
-            return entityFocusEye(entityId, mode == ReactionsNetworking.EYE_FOCUS_ENTITY ? targetEye : 0, blinking);
-        }
-        return 0;
-    }
-
-    private static int focusToEye(float focus) {
         if (focus <= -BLOCK_FOCUS_EYE_THRESHOLD) {
             return -1;
         }
@@ -530,18 +516,6 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             return 1;
         }
         return 0;
-    }
-
-    private static int entityFocusEye(int entityId, int targetEye, boolean blinking) {
-        if (blinking) {
-            if (targetEye == 0) {
-                ENTITY_FOCUS_EYES.remove(entityId);
-            } else {
-                ENTITY_FOCUS_EYES.put(entityId, targetEye);
-            }
-            return targetEye;
-        }
-        return ENTITY_FOCUS_EYES.getOrDefault(entityId, 0);
     }
 
     private static RenderType renderType(Identifier texture) {

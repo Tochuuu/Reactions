@@ -57,8 +57,16 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
                     ReactionsNetworking.handleServerboundConfig(payload, serverPlayer);
                 }
             })
+            .playToServer(ReactionsNetworking.EyeFocusC2SPayload.TYPE, ReactionsNetworking.EyeFocusC2SPayload.STREAM_CODEC, (payload, context) -> {
+                if (context.player() instanceof ServerPlayer serverPlayer) {
+                    ReactionsNetworking.handleServerboundEyeFocus(payload, serverPlayer);
+                }
+            })
             .playToClient(ReactionsNetworking.EyeConfigS2CPayload.TYPE, ReactionsNetworking.EyeConfigS2CPayload.STREAM_CODEC, (payload, context) -> {
                 ReactionsNetworking.handleClientboundConfig(payload);
+            })
+            .playToClient(ReactionsNetworking.EyeFocusS2CPayload.TYPE, ReactionsNetworking.EyeFocusS2CPayload.STREAM_CODEC, (payload, context) -> {
+                ReactionsNetworking.handleClientboundEyeFocus(payload);
             });
     }
 
@@ -107,6 +115,17 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
         return player.connection instanceof ICommonPacketListener listener && canUseChannel(listener, ReactionsNetworking.EyeConfigS2CPayload.TYPE);
     }
 
+    @Override
+    public boolean canSendEyeFocusToServer() {
+        ClientPacketListener connection = Minecraft.getInstance().getConnection();
+        return connection instanceof ICommonPacketListener listener && canUseChannel(listener, ReactionsNetworking.EyeFocusC2SPayload.TYPE);
+    }
+
+    @Override
+    public boolean canSendEyeFocusToPlayer(ServerPlayer player) {
+        return player.connection instanceof ICommonPacketListener listener && canUseChannel(listener, ReactionsNetworking.EyeFocusS2CPayload.TYPE);
+    }
+
     private static boolean canUseChannel(ICommonPacketListener listener, net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<?> type) {
         if (listener.hasChannel(type)) {
             return true;
@@ -125,6 +144,16 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
 
     @Override
     public void sendToPlayer(ServerPlayer player, ReactionsNetworking.EyeConfigS2CPayload payload) {
+        PacketDistributor.sendToPlayer(player, payload);
+    }
+
+    @Override
+    public void sendEyeFocusToServer(ReactionsNetworking.EyeFocusC2SPayload payload) {
+        ClientPacketDistributor.sendToServer(payload);
+    }
+
+    @Override
+    public void sendEyeFocusToPlayer(ServerPlayer player, ReactionsNetworking.EyeFocusS2CPayload payload) {
         PacketDistributor.sendToPlayer(player, payload);
     }
 }

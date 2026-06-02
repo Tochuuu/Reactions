@@ -23,6 +23,9 @@ public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMess
     private static final String FOCUS_S2C_CHANNEL = "reactions:eye_focus_s2c";
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
+    private static final int EYE_FOCUS_NONE = 0;
+    private static final int EYE_FOCUS_BLOCK = 1;
+    private static final int EYE_FOCUS_ENTITY = 2;
     private static final int LEGACY_CONFIG_VALUE_COUNT = 8;
     private static final int CONFIG_VALUE_COUNT = 13;
     private final Map<UUID, EyeConfig> configs = new HashMap<>();
@@ -112,12 +115,13 @@ public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMess
         }
 
         int focus = clamp(message[0], -100, 100);
+        int mode = message.length > 1 ? clampFocusMode(message[1] & 0xFF) : EYE_FOCUS_BLOCK;
         byte[] payload;
-        if (focus == 0) {
+        if (focus == 0 || mode == EYE_FOCUS_NONE) {
             focuses.remove(player.getUniqueId());
             payload = writeFocusRemove(player.getUniqueId());
         } else {
-            EyeFocus state = new EyeFocus(player.getUniqueId(), player.getEntityId(), focus);
+            EyeFocus state = new EyeFocus(player.getUniqueId(), player.getEntityId(), focus, mode);
             focuses.put(player.getUniqueId(), state);
             payload = writeFocusUpdate(state);
         }
@@ -163,11 +167,12 @@ public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMess
     }
 
     private static byte[] writeFocusUpdate(EyeFocus focus) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(1 + 16 + 5 + 1);
+        ByteArrayOutputStream out = new ByteArrayOutputStream(1 + 16 + 5 + 2);
         out.write(UPDATE);
         writeUuid(out, focus.playerId());
         writeVarInt(out, focus.entityId());
         out.write(clamp(focus.focus(), -100, 100));
+        out.write(clampFocusMode(focus.mode()));
         return out.toByteArray();
     }
 
@@ -214,9 +219,13 @@ public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMess
         return Math.max(min, Math.min(max, value));
     }
 
+    private static int clampFocusMode(int mode) {
+        return mode == EYE_FOCUS_BLOCK || mode == EYE_FOCUS_ENTITY ? mode : EYE_FOCUS_NONE;
+    }
+
     private record EyeConfig(UUID playerId, int entityId, byte[] values) {
     }
 
-    private record EyeFocus(UUID playerId, int entityId, int focus) {
+    private record EyeFocus(UUID playerId, int entityId, int focus, int mode) {
     }
 }

@@ -24,8 +24,11 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
 
         PayloadTypeRegistry.serverboundPlay().register(ReactionsNetworking.EyeConfigC2SPayload.TYPE, ReactionsNetworking.EyeConfigC2SPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ReactionsNetworking.EyeConfigS2CPayload.TYPE, ReactionsNetworking.EyeConfigS2CPayload.STREAM_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ReactionsNetworking.EyeFocusC2SPayload.TYPE, ReactionsNetworking.EyeFocusC2SPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ReactionsNetworking.EyeFocusS2CPayload.TYPE, ReactionsNetworking.EyeFocusS2CPayload.STREAM_CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeConfigC2SPayload.TYPE, (payload, context) -> ReactionsNetworking.handleServerboundConfig(payload, context.player()));
+        ServerPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeFocusC2SPayload.TYPE, (payload, context) -> ReactionsNetworking.handleServerboundEyeFocus(payload, context.player()));
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> ReactionsNetworking.onServerPlayerJoin(handler.player));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> ReactionsNetworking.onServerPlayerQuit(handler.player));
         ServerTickEvents.END_SERVER_TICK.register(ReactionsNetworking::onServerTick);
@@ -43,6 +46,16 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
     }
 
     @Override
+    public boolean canSendEyeFocusToServer() {
+        return false;
+    }
+
+    @Override
+    public boolean canSendEyeFocusToPlayer(ServerPlayer player) {
+        return ServerPlayNetworking.canSend(player, ReactionsNetworking.EyeFocusS2CPayload.TYPE);
+    }
+
+    @Override
     public void sendToServer(ReactionsNetworking.EyeConfigC2SPayload payload) {
         throw new UnsupportedOperationException("Cannot send serverbound packets from a dedicated server");
     }
@@ -55,5 +68,15 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
         }
 
         player.connection.send(new ClientboundCustomPayloadPacket(payload));
+    }
+
+    @Override
+    public void sendEyeFocusToServer(ReactionsNetworking.EyeFocusC2SPayload payload) {
+        throw new UnsupportedOperationException("Cannot send serverbound packets from a dedicated server");
+    }
+
+    @Override
+    public void sendEyeFocusToPlayer(ServerPlayer player, ReactionsNetworking.EyeFocusS2CPayload payload) {
+        ServerPlayNetworking.send(player, payload);
     }
 }

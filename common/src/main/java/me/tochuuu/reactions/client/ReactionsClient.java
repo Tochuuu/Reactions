@@ -28,6 +28,7 @@ public final class ReactionsClient {
     }
 
     public static void onClientTick(Minecraft client) {
+        BlockInteractionEyeFocus.onClientTick(client);
         while (OPEN_CONFIG.consumeClick()) {
             Minecraft minecraft = Minecraft.getInstance();
             if (minecraft.screen == null) {

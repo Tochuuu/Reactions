@@ -37,6 +37,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final int BOW_FULL_CHARGE_TICKS = 20;
     private static final float SQUINT_VISIBLE_EYE_COVERAGE = 0.5F;
     private static final float HURT_SCLERA_EXTENSION = 0.5F;
+    private static final float BLOCK_FOCUS_EYE_THRESHOLD = 0.25F;
     private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, 11, 14, 12, 14, 10, 11, 2, 1);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> DAMAGE_REACTIONS = new java.util.HashMap<>();
@@ -79,7 +80,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         boolean animationsEnabled = isSelf ? config.animateSelf : config.animateOthers;
         boolean sleeping = player.isSleeping();
         boolean blinking = !sleeping && animationsEnabled && isBlinking(player, ageInTicks, config);
-        int mirroredEye = animationsEnabled && !blinking ? mirroredIdleEye(player, ageInTicks) : 0;
+        int blockFocusEye = animationsEnabled && !blinking ? blockFocusEye(player, isSelf) : 0;
+        int mirroredEye = animationsEnabled && !blinking ? blockFocusEye != 0 ? blockFocusEye : mirroredIdleEye(player, ageInTicks) : 0;
         HumanoidArm spyglassArm = spyglassUseArm(player);
         HumanoidArm bowArm = bowUseArm(player);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(player, bowArm);
@@ -490,6 +492,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             return -1;
         }
         if (phase < IDLE_LOOK_STEP_TICKS * 2) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private static int blockFocusEye(AbstractClientPlayer player, boolean isSelf) {
+        float focus = isSelf ? BlockInteractionEyeFocus.localFocusAmount() : ReactionsNetworking.remoteEyeFocus(player.getId()) / 100.0F;
+        if (focus <= -BLOCK_FOCUS_EYE_THRESHOLD) {
+            return -1;
+        }
+        if (focus >= BLOCK_FOCUS_EYE_THRESHOLD) {
             return 1;
         }
         return 0;

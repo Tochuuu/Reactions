@@ -19,32 +19,44 @@ import java.util.UUID;
 public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMessageListener, Listener {
     private static final String C2S_CHANNEL = "reactions:eye_config_c2s";
     private static final String S2C_CHANNEL = "reactions:eye_config_s2c";
+    private static final String FOCUS_C2S_CHANNEL = "reactions:eye_focus_c2s";
+    private static final String FOCUS_S2C_CHANNEL = "reactions:eye_focus_s2c";
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
     private static final int LEGACY_CONFIG_VALUE_COUNT = 8;
     private static final int CONFIG_VALUE_COUNT = 13;
     private final Map<UUID, EyeConfig> configs = new HashMap<>();
+    private final Map<UUID, EyeFocus> focuses = new HashMap<>();
 
     @Override
     public void onEnable() {
         getServer().getMessenger().registerIncomingPluginChannel(this, C2S_CHANNEL, this);
+        getServer().getMessenger().registerIncomingPluginChannel(this, FOCUS_C2S_CHANNEL, this);
         getServer().getMessenger().registerOutgoingPluginChannel(this, S2C_CHANNEL);
+        getServer().getMessenger().registerOutgoingPluginChannel(this, FOCUS_S2C_CHANNEL);
         getServer().getPluginManager().registerEvents(this, this);
     }
 
     @Override
     public void onDisable() {
         getServer().getMessenger().unregisterIncomingPluginChannel(this, C2S_CHANNEL, this);
+        getServer().getMessenger().unregisterIncomingPluginChannel(this, FOCUS_C2S_CHANNEL, this);
         getServer().getMessenger().unregisterOutgoingPluginChannel(this, S2C_CHANNEL);
+        getServer().getMessenger().unregisterOutgoingPluginChannel(this, FOCUS_S2C_CHANNEL);
         configs.clear();
+        focuses.clear();
     }
 
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
-        if (!C2S_CHANNEL.equals(channel)) {
+        if (FOCUS_C2S_CHANNEL.equals(channel)) {
+            handleFocusMessage(player, message);
             return;
         }
 
+        if (!C2S_CHANNEL.equals(channel)) {
+            return;
+        }
         EyeConfig config = readClientConfig(player, message);
         if (config == null) {
             return;
@@ -53,7 +65,7 @@ public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMess
         configs.put(player.getUniqueId(), config);
         byte[] update = writeUpdate(config);
         for (Player receiver : Bukkit.getOnlinePlayers()) {
-            sendIfReady(receiver, update);
+            sendIfReady(receiver, S2C_CHANNEL, update);
         }
     }
 
@@ -65,7 +77,10 @@ public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMess
                 return;
             }
             for (EyeConfig config : configs.values()) {
-                sendIfReady(player, writeUpdate(config));
+                sendIfReady(player, S2C_CHANNEL, writeUpdate(config));
+            }
+            for (EyeFocus focus : focuses.values()) {
+                sendIfReady(player, FOCUS_S2C_CHANNEL, writeFocusUpdate(focus));
             }
         }, 20L);
     }
@@ -73,18 +88,47 @@ public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMess
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
-        if (configs.remove(player.getUniqueId()) == null) {
+        boolean removedConfig = configs.remove(player.getUniqueId()) != null;
+        boolean removedFocus = focuses.remove(player.getUniqueId()) != null;
+        if (!removedConfig && !removedFocus) {
             return;
         }
 
-        byte[] remove = writeRemove(player.getUniqueId());
+        byte[] configRemove = writeRemove(player.getUniqueId());
+        byte[] focusRemove = writeFocusRemove(player.getUniqueId());
         for (Player receiver : Bukkit.getOnlinePlayers()) {
-            sendIfReady(receiver, remove);
+            if (removedConfig) {
+                sendIfReady(receiver, S2C_CHANNEL, configRemove);
+            }
+            if (removedFocus) {
+                sendIfReady(receiver, FOCUS_S2C_CHANNEL, focusRemove);
+            }
         }
     }
 
-    private void sendIfReady(Player player, byte[] message) {
-        player.sendPluginMessage(this, S2C_CHANNEL, message);
+    private void handleFocusMessage(Player player, byte[] message) {
+        if (message.length < 1) {
+            return;
+        }
+
+        int focus = clamp(message[0], -100, 100);
+        byte[] payload;
+        if (focus == 0) {
+            focuses.remove(player.getUniqueId());
+            payload = writeFocusRemove(player.getUniqueId());
+        } else {
+            EyeFocus state = new EyeFocus(player.getUniqueId(), player.getEntityId(), focus);
+            focuses.put(player.getUniqueId(), state);
+            payload = writeFocusUpdate(state);
+        }
+
+        for (Player receiver : Bukkit.getOnlinePlayers()) {
+            sendIfReady(receiver, FOCUS_S2C_CHANNEL, payload);
+        }
+    }
+
+    private void sendIfReady(Player player, String channel, byte[] message) {
+        player.sendPluginMessage(this, channel, message);
     }
 
     private static EyeConfig readClientConfig(Player player, byte[] message) {
@@ -112,6 +156,22 @@ public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMess
     }
 
     private static byte[] writeRemove(UUID playerId) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream(1 + 16);
+        out.write(REMOVE);
+        writeUuid(out, playerId);
+        return out.toByteArray();
+    }
+
+    private static byte[] writeFocusUpdate(EyeFocus focus) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream(1 + 16 + 5 + 1);
+        out.write(UPDATE);
+        writeUuid(out, focus.playerId());
+        writeVarInt(out, focus.entityId());
+        out.write(clamp(focus.focus(), -100, 100));
+        return out.toByteArray();
+    }
+
+    private static byte[] writeFocusRemove(UUID playerId) {
         ByteArrayOutputStream out = new ByteArrayOutputStream(1 + 16);
         out.write(REMOVE);
         writeUuid(out, playerId);
@@ -150,6 +210,13 @@ public final class ReactionsRelayPlugin extends JavaPlugin implements PluginMess
         out.write(value);
     }
 
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
     private record EyeConfig(UUID playerId, int entityId, byte[] values) {
+    }
+
+    private record EyeFocus(UUID playerId, int entityId, int focus) {
     }
 }

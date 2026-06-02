@@ -24,9 +24,6 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     private static final Identifier EYE_FOCUS_S2C = Identifier.fromNamespaceAndPath("reactions", "eye_focus_s2c");
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
-    private static final int EYE_FOCUS_NONE = 0;
-    private static final int EYE_FOCUS_BLOCK = 1;
-    private static final int EYE_FOCUS_ENTITY = 2;
     private static final int LEGACY_CONFIG_VALUE_COUNT = 8;
     private static final int CONFIG_VALUE_COUNT = 13;
     private static final int SERVER_SYNC_RETRY_TICKS = 20 * 30;
@@ -42,7 +39,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         PayloadTypeRegistry.clientboundPlay().register(EyeFocusS2CPayload.TYPE, EyeFocusS2CPayload.STREAM_CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(EyeConfigC2SPayload.TYPE, (payload, context) -> handleConfig(context.player(), payload.config()));
-        ServerPlayNetworking.registerGlobalReceiver(EyeFocusC2SPayload.TYPE, (payload, context) -> handleFocus(context.player(), payload.focus(), payload.mode()));
+        ServerPlayNetworking.registerGlobalReceiver(EyeFocusC2SPayload.TYPE, (payload, context) -> handleFocus(context.player(), payload.focus()));
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> PENDING_SYNC.put(handler.player.getUUID(), SERVER_SYNC_RETRY_TICKS));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> removeConfig(handler.player));
         ServerTickEvents.END_SERVER_TICK.register(ReactionsFabricServerRelay::retrySync);
@@ -55,15 +52,14 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         broadcast(source.level().getServer(), EyeConfigS2CPayload.update(serverConfig));
     }
 
-    private static void handleFocus(ServerPlayer source, int focus, int mode) {
+    private static void handleFocus(ServerPlayer source, int focus) {
         int clampedFocus = clamp(focus, -100, 100);
-        int clampedMode = clampFocusMode(mode);
-        if (clampedFocus == 0 || clampedMode == EYE_FOCUS_NONE) {
+        if (clampedFocus == 0) {
             FOCUSES.remove(source.getUUID());
         } else {
-            FOCUSES.put(source.getUUID(), new EyeFocus(source.getUUID(), source.getId(), clampedFocus, clampedMode));
+            FOCUSES.put(source.getUUID(), new EyeFocus(source.getUUID(), source.getId(), clampedFocus));
         }
-        broadcastFocus(source.level().getServer(), clampedFocus == 0 || clampedMode == EYE_FOCUS_NONE ? EyeFocusS2CPayload.remove(source.getUUID()) : EyeFocusS2CPayload.update(new EyeFocus(source.getUUID(), source.getId(), clampedFocus, clampedMode)));
+        broadcastFocus(source.level().getServer(), clampedFocus == 0 ? EyeFocusS2CPayload.remove(source.getUUID()) : EyeFocusS2CPayload.update(new EyeFocus(source.getUUID(), source.getId(), clampedFocus)));
     }
 
     private static void removeConfig(ServerPlayer player) {
@@ -182,17 +178,13 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static int clampFocusMode(int mode) {
-        return mode == EYE_FOCUS_BLOCK || mode == EYE_FOCUS_ENTITY ? mode : EYE_FOCUS_NONE;
-    }
-
     private record EyeConfig(UUID playerId, int entityId, int[] values) {
         private EyeConfig withPlayer(ServerPlayer player) {
             return new EyeConfig(player.getUUID(), player.getId(), values);
         }
     }
 
-    private record EyeFocus(UUID playerId, int entityId, int focus, int mode) {
+    private record EyeFocus(UUID playerId, int entityId, int focus) {
     }
 
     private record EyeConfigC2SPayload(EyeConfig config) implements CustomPacketPayload {
@@ -248,19 +240,16 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         }
     }
 
-    private record EyeFocusC2SPayload(int focus, int mode) implements CustomPacketPayload {
+    private record EyeFocusC2SPayload(int focus) implements CustomPacketPayload {
         private static final Type<EyeFocusC2SPayload> TYPE = new Type<>(EYE_FOCUS_C2S);
         private static final StreamCodec<RegistryFriendlyByteBuf, EyeFocusC2SPayload> STREAM_CODEC = StreamCodec.ofMember(EyeFocusC2SPayload::write, EyeFocusC2SPayload::read);
 
         private static EyeFocusC2SPayload read(RegistryFriendlyByteBuf buf) {
-            int focus = buf.readByte();
-            int mode = buf.readableBytes() > 0 ? buf.readUnsignedByte() : EYE_FOCUS_BLOCK;
-            return new EyeFocusC2SPayload(focus, mode);
+            return new EyeFocusC2SPayload(buf.readByte());
         }
 
         private void write(RegistryFriendlyByteBuf buf) {
             buf.writeByte(clamp(focus, -100, 100));
-            buf.writeByte(clampFocusMode(mode));
         }
 
         @Override
@@ -285,10 +274,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
             int action = buf.readUnsignedByte();
             UUID playerId = buf.readUUID();
             if (action == UPDATE) {
-                int entityId = buf.readVarInt();
-                int focus = buf.readByte();
-                int mode = buf.readableBytes() > 0 ? buf.readUnsignedByte() : EYE_FOCUS_BLOCK;
-                return update(new EyeFocus(playerId, entityId, focus, mode));
+                return update(new EyeFocus(playerId, buf.readVarInt(), buf.readByte()));
             }
             return remove(playerId);
         }
@@ -299,7 +285,6 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
                 buf.writeUUID(focus.playerId());
                 buf.writeVarInt(focus.entityId());
                 buf.writeByte(focus.focus());
-                buf.writeByte(focus.mode());
             } else {
                 buf.writeUUID(playerId);
             }

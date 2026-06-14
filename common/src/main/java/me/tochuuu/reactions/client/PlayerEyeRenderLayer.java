@@ -75,14 +75,15 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         RenderType renderType = renderType(texture);
         boolean animationsEnabled = isSelf ? config.animateSelf : config.animateOthers;
         boolean sleeping = state.hasPose(Pose.SLEEPING);
-        boolean blinking = !sleeping && animationsEnabled && isBlinking(state, config);
+        PlayerActionAnimationState.Snapshot actionState = PlayerActionAnimationState.snapshot(state.id);
+        boolean blinking = !sleeping && animationsEnabled && (isBlinking(state, config) || actionState.landingBlink());
         int blockFocusEye = animationsEnabled && !blinking ? blockFocusEye(state.id, isSelf) : 0;
         int mirroredEye = animationsEnabled && !blinking ? blockFocusEye != 0 ? blockFocusEye : mirroredIdleEye(state) : 0;
         HumanoidArm spyglassArm = spyglassUseArm(state);
         HumanoidArm bowArm = bowUseArm(state);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(state, bowArm);
         DamageEyeReaction damageReaction = animationsEnabled ? damageReaction(state.id, state.hasRedOverlay, state.ageInTicks) : DamageEyeReaction.NONE;
-        boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA;
+        boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || actionState.fallingSurprise();
         EyeExpression leftEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, bowSquint);
         EyeExpression rightEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, bowSquint);
         if (damageReaction == DamageEyeReaction.CLOSED) {
@@ -99,7 +100,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
-            submitMouth(poseStack, collector, renderType, light, overlay, eyes);
+            if (animationsEnabled && actionState.mouthUseAnimation() != PlayerActionAnimationState.MouthUseAnimation.NONE) {
+                submitUseMouth(poseStack, collector, renderType, light, overlay, eyes, actionState.mouthUseAnimation(), state.ageInTicks, state.id);
+            } else {
+                submitMouth(poseStack, collector, renderType, light, overlay, eyes);
+            }
         }
         poseStack.popPose();
     }
@@ -111,7 +116,12 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
         } else {
-            submitMouth(poseStack, collector, renderType, light, overlay, eyes);
+            PlayerActionAnimationState.Snapshot actionState = PlayerActionAnimationState.snapshot(state.id);
+            if (animationsEnabled && actionState.mouthUseAnimation() != PlayerActionAnimationState.MouthUseAnimation.NONE) {
+                submitUseMouth(poseStack, collector, renderType, light, overlay, eyes, actionState.mouthUseAnimation(), state.ageInTicks, state.id);
+            } else {
+                submitMouth(poseStack, collector, renderType, light, overlay, eyes);
+            }
         }
         poseStack.popPose();
     }
@@ -244,6 +254,23 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float splitX = dstX1 + width * 0.5F;
         submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, 1.25F, dstX1, dstY1, splitX, dstY1 + height + ADVANCEMENT_MOUTH_TOP_EXTENSION);
         submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, 1.25F, splitX, dstY1, dstX1 + width, dstY1 + height + ADVANCEMENT_MOUTH_TOP_EXTENSION);
+    }
+
+    private static void submitUseMouth(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes, PlayerActionAnimationState.MouthUseAnimation animation, float ageInTicks, int entityId) {
+        float coverX = eyes.leftMouthX - HEAD_FRONT_U - 4.0F;
+        float coverY = eyes.leftMouthY - HEAD_FRONT_V - 8.0F;
+        submitMouthCover(poseStack, collector, renderType, light, overlay, eyes, coverX, coverY, 2.0F, 1.0F);
+
+        float offsetTicks = ageInTicks + seededOffset(entityId, 41, 6);
+        float wave = 0.5F + 0.5F * (float) Math.sin(offsetTicks * Math.PI * 0.35D);
+        float width = animation == PlayerActionAnimationState.MouthUseAnimation.DRINKING ? 1.15F + wave * 0.15F : 1.45F + wave * 0.35F;
+        float height = animation == PlayerActionAnimationState.MouthUseAnimation.DRINKING ? 1.15F + wave * 0.25F : 1.0F + wave * 0.45F;
+        float centerX = ((eyes.leftMouthX + 0.5F) + (eyes.rightMouthX + 0.5F)) * 0.5F;
+        float dstX1 = centerX - HEAD_FRONT_U - 4.0F - width * 0.5F;
+        float dstY1 = coverY + 0.05F;
+        float splitX = dstX1 + width * 0.5F;
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, 1.0F, dstX1, dstY1, splitX, dstY1 + height);
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, 1.0F, splitX, dstY1, dstX1 + width, dstY1 + height);
     }
 
     private static void submitMouthCover(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes, float dstX1, float dstY1, float width, float height) {

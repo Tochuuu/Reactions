@@ -11,7 +11,7 @@ public final class PlayerActionAnimationState {
     private static final float FALL_SURPRISE_DISTANCE = 3.0F;
     private static final float VISIBLE_FALL_SURPRISE_DISTANCE = 1.2F;
     private static final double FALL_SURPRISE_SPEED = -0.35D;
-    private static final int FALL_SURPRISE_MIN_TICKS = 12;
+    private static final int FALL_SURPRISE_MIN_TICKS = 30;
     private static final int LANDING_BLINK_TICKS = 7;
     private static final Snapshot EMPTY = new Snapshot(MouthUseAnimation.NONE, false, false);
     private static final Map<Integer, Snapshot> SNAPSHOTS = new HashMap<>();

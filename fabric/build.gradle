@@ -40,7 +40,7 @@ dependencies {
     runtimeOnly "com.terraformersmc:modmenu:$rootProject.modmenu_version"
 
     common(project(path: ':common')) { transitive false }
-    shadowBundle project(path: ':common')
+    shadowBundle project(path: ':common', configuration: 'transformProductionFabric')
 }
 
 processResources {
@@ -49,6 +49,14 @@ processResources {
     filesMatching('fabric.mod.json') {
         expand version: project.version
     }
+}
+
+jar {
+    dependsOn configurations.shadowBundle
+    from {
+        configurations.shadowBundle.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 
 shadowJar {

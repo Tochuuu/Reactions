@@ -38,11 +38,23 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final float SQUINT_VISIBLE_EYE_COVERAGE = 0.5F;
     private static final float HURT_SCLERA_EXTENSION = 0.5F;
     private static final float BLOCK_FOCUS_EYE_THRESHOLD = 0.25F;
+    private static final float FALL_SURPRISE_DISTANCE = 3.0F;
+    private static final float VISIBLE_FALL_SURPRISE_DISTANCE = 1.2F;
+    private static final double FALL_SURPRISE_SPEED = -0.35D;
+    private static final int FALL_SURPRISE_MIN_TICKS = 12;
+    private static final int LANDING_BLINK_TICKS = 7;
     private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, 11, 14, 12, 14, 10, 11, 2, 1);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> DAMAGE_REACTIONS = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> LAST_DAMAGE_REACTIONS = new java.util.HashMap<>();
     private static final java.util.Map<Integer, Integer> DAMAGE_REACTION_STREAKS = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, Float> FALL_DISTANCE_PEAKS = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, Float> VISIBLE_FALL_DISTANCE_PEAKS = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, Double> LAST_VISIBLE_Y = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, Double> VISIBLE_VERTICAL_SPEEDS = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, Integer> FALL_SAMPLE_TICKS = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, Integer> FALL_STARTED_AT = new java.util.HashMap<>();
+    private static final java.util.Map<Integer, Float> LANDING_BLINK_UNTIL = new java.util.HashMap<>();
 
     public PlayerEyeRenderLayer(RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> parent) {
         super(parent);
@@ -79,14 +91,16 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         RenderType renderType = renderType(texture);
         boolean animationsEnabled = isSelf ? config.animateSelf : config.animateOthers;
         boolean sleeping = player.isSleeping();
-        boolean blinking = !sleeping && animationsEnabled && isBlinking(player, ageInTicks, config);
+        FallEyeReaction fallReaction = animationsEnabled ? fallReaction(player, ageInTicks) : FallEyeReaction.NONE;
+        boolean blinking = !sleeping && animationsEnabled && (isBlinking(player, ageInTicks, config) || fallReaction == FallEyeReaction.LANDING_BLINK);
         int blockFocusEye = animationsEnabled && !blinking ? blockFocusEye(player, isSelf) : 0;
         int mirroredEye = animationsEnabled && !blinking ? blockFocusEye != 0 ? blockFocusEye : mirroredIdleEye(player, ageInTicks) : 0;
         HumanoidArm spyglassArm = spyglassUseArm(player);
         HumanoidArm bowArm = bowUseArm(player);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(player, bowArm);
         DamageEyeReaction damageReaction = animationsEnabled ? damageReaction(player.getId(), player.hurtTime > 0, ageInTicks) : DamageEyeReaction.NONE;
-        boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA;
+        boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallReaction == FallEyeReaction.SURPRISE;
+        MouthUseAnimation mouthUseAnimation = animationsEnabled ? mouthUseAnimation(player) : MouthUseAnimation.NONE;
         EyeExpression leftEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, bowSquint);
         EyeExpression rightEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, bowSquint);
         if (damageReaction == DamageEyeReaction.CLOSED) {
@@ -104,7 +118,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         if (animationsEnabled && AdvancementMouthReaction.active(player.getId())) {
             submitAdvancementMouth(poseStack, consumer, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
-            submitMouth(poseStack, consumer, light, overlay, eyes);
+            if (animationsEnabled && mouthUseAnimation != MouthUseAnimation.NONE) {
+                submitUseMouth(poseStack, consumer, light, overlay, eyes, mouthUseAnimation, ageInTicks, player.getId());
+            } else {
+                submitMouth(poseStack, consumer, light, overlay, eyes);
+            }
         }
         poseStack.popPose();
     }
@@ -117,7 +135,12 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         if (animationsEnabled && AdvancementMouthReaction.active(player.getId())) {
             submitAdvancementMouth(poseStack, consumer, light, overlay, eyes);
         } else {
-            submitMouth(poseStack, consumer, light, overlay, eyes);
+            MouthUseAnimation mouthUseAnimation = animationsEnabled ? mouthUseAnimation(player) : MouthUseAnimation.NONE;
+            if (animationsEnabled && mouthUseAnimation != MouthUseAnimation.NONE) {
+                submitUseMouth(poseStack, consumer, light, overlay, eyes, mouthUseAnimation, player.tickCount, player.getId());
+            } else {
+                submitMouth(poseStack, consumer, light, overlay, eyes);
+            }
         }
         poseStack.popPose();
     }
@@ -207,6 +230,18 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         CLOSED
     }
 
+    private enum FallEyeReaction {
+        NONE,
+        SURPRISE,
+        LANDING_BLINK
+    }
+
+    private enum MouthUseAnimation {
+        NONE,
+        EATING,
+        DRINKING
+    }
+
     private enum EyeSide {
         LEFT,
         RIGHT
@@ -250,6 +285,23 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         float splitX = dstX1 + width * 0.5F;
         submitMouthPixel(poseStack, consumer, light, overlay, eyes.leftMouthX, eyes.leftMouthY, 1.25F, dstX1, dstY1, splitX, dstY1 + height + ADVANCEMENT_MOUTH_TOP_EXTENSION);
         submitMouthPixel(poseStack, consumer, light, overlay, eyes.rightMouthX, eyes.rightMouthY, 1.25F, splitX, dstY1, dstX1 + width, dstY1 + height + ADVANCEMENT_MOUTH_TOP_EXTENSION);
+    }
+
+    private static void submitUseMouth(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, EyeSettings eyes, MouthUseAnimation animation, float ageInTicks, int entityId) {
+        float coverX = eyes.leftMouthX - HEAD_FRONT_U - 4.0F;
+        float coverY = eyes.leftMouthY - HEAD_FRONT_V - 8.0F;
+        submitMouthCover(poseStack, consumer, light, overlay, eyes, coverX, coverY, 2.0F, 1.0F);
+
+        float offsetTicks = ageInTicks + seededOffset(entityId, 41, 6);
+        float wave = 0.5F + 0.5F * (float) Math.sin(offsetTicks * Math.PI * 0.35D);
+        float width = animation == MouthUseAnimation.DRINKING ? 1.15F + wave * 0.15F : 1.45F + wave * 0.35F;
+        float height = animation == MouthUseAnimation.DRINKING ? 1.15F + wave * 0.25F : 1.0F + wave * 0.45F;
+        float centerX = ((eyes.leftMouthX + 0.5F) + (eyes.rightMouthX + 0.5F)) * 0.5F;
+        float dstX1 = centerX - HEAD_FRONT_U - 4.0F - width * 0.5F;
+        float dstY1 = coverY + 0.05F;
+        float splitX = dstX1 + width * 0.5F;
+        submitMouthPixel(poseStack, consumer, light, overlay, eyes.leftMouthX, eyes.leftMouthY, 1.0F, dstX1, dstY1, splitX, dstY1 + height);
+        submitMouthPixel(poseStack, consumer, light, overlay, eyes.rightMouthX, eyes.rightMouthY, 1.0F, splitX, dstY1, dstX1 + width, dstY1 + height);
     }
 
     private static void submitMouthCover(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, EyeSettings eyes, float dstX1, float dstY1, float width, float height) {
@@ -370,6 +422,96 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             float v2 = (skinY + eyeHeight) / SKIN_SIZE;
             quad(consumer, poseStack.last(), columnDstX1, extendedDstY1, columnDstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
         }
+    }
+
+    private static FallEyeReaction fallReaction(AbstractClientPlayer player, float ageInTicks) {
+        int entityId = player.getId();
+        updateVisibleFallState(player);
+
+        boolean onGround = isFallInterrupted(player);
+        float previousPeak = Math.max(
+            FALL_DISTANCE_PEAKS.getOrDefault(entityId, 0.0F),
+            VISIBLE_FALL_DISTANCE_PEAKS.getOrDefault(entityId, 0.0F)
+        );
+        int fallingTicks = 0;
+        if (onGround) {
+            if (previousPeak >= FALL_SURPRISE_DISTANCE) {
+                LANDING_BLINK_UNTIL.put(entityId, ageInTicks + LANDING_BLINK_TICKS);
+            }
+            FALL_DISTANCE_PEAKS.remove(entityId);
+            VISIBLE_FALL_DISTANCE_PEAKS.remove(entityId);
+            FALL_STARTED_AT.remove(entityId);
+        } else {
+            int fallStartedAt = FALL_STARTED_AT.computeIfAbsent(entityId, ignored -> player.tickCount);
+            fallingTicks = Math.max(0, player.tickCount - fallStartedAt);
+            FALL_DISTANCE_PEAKS.put(entityId, Math.max(previousPeak, player.fallDistance));
+        }
+
+        Float blinkUntil = LANDING_BLINK_UNTIL.get(entityId);
+        if (blinkUntil != null) {
+            if (ageInTicks < blinkUntil) {
+                return FallEyeReaction.LANDING_BLINK;
+            }
+            LANDING_BLINK_UNTIL.remove(entityId);
+        }
+
+        if (!onGround && fallingTicks >= FALL_SURPRISE_MIN_TICKS && isFallingFastEnough(player)) {
+            return FallEyeReaction.SURPRISE;
+        }
+        return FallEyeReaction.NONE;
+    }
+
+    private static void updateVisibleFallState(AbstractClientPlayer player) {
+        int entityId = player.getId();
+        int tick = player.tickCount;
+        Integer lastTick = FALL_SAMPLE_TICKS.put(entityId, tick);
+        Double lastY = LAST_VISIBLE_Y.put(entityId, player.getY());
+        if (lastTick == null || lastY == null || lastTick == tick) {
+            return;
+        }
+
+        int elapsedTicks = Math.max(1, tick - lastTick);
+        double visibleSpeed = (player.getY() - lastY) / elapsedTicks;
+        VISIBLE_VERTICAL_SPEEDS.put(entityId, visibleSpeed);
+        if (isFallInterrupted(player)) {
+            return;
+        }
+
+        if (visibleSpeed < -0.01D) {
+            float visibleDrop = (float) -visibleSpeed * elapsedTicks;
+            float previousPeak = VISIBLE_FALL_DISTANCE_PEAKS.getOrDefault(entityId, 0.0F);
+            VISIBLE_FALL_DISTANCE_PEAKS.put(entityId, previousPeak + visibleDrop);
+        }
+    }
+
+    private static boolean isFallInterrupted(AbstractClientPlayer player) {
+        return player.onGround()
+            || player.isInWater()
+            || player.isPassenger()
+            || player.isFallFlying();
+    }
+
+    private static boolean isFallingFastEnough(AbstractClientPlayer player) {
+        int entityId = player.getId();
+        return player.fallDistance >= FALL_SURPRISE_DISTANCE
+            || VISIBLE_FALL_DISTANCE_PEAKS.getOrDefault(entityId, 0.0F) >= VISIBLE_FALL_SURPRISE_DISTANCE
+            || player.getDeltaMovement().y <= FALL_SURPRISE_SPEED
+            || VISIBLE_VERTICAL_SPEEDS.getOrDefault(entityId, 0.0D) <= FALL_SURPRISE_SPEED;
+    }
+
+    private static MouthUseAnimation mouthUseAnimation(AbstractClientPlayer player) {
+        if (!player.isUsingItem()) {
+            return MouthUseAnimation.NONE;
+        }
+
+        String animation = player.getUseItem().getUseAnimation().name();
+        if ("EAT".equals(animation)) {
+            return MouthUseAnimation.EATING;
+        }
+        if ("DRINK".equals(animation)) {
+            return MouthUseAnimation.DRINKING;
+        }
+        return MouthUseAnimation.NONE;
     }
 
     private static DamageEyeReaction damageReaction(int entityId, boolean hurt, float ageInTicks) {

@@ -14,6 +14,11 @@ public final class BlockInteractionEyeFocus {
     private static final int RECENT_BLOCK_TICKS = 8;
     private static final double MAX_FOCUS_ANGLE = Math.toRadians(55.0D);
     private static final float FOCUS_DEAD_ZONE = 0.18F;
+    private static final float BLOCK_FOCUS_STEP = 0.22F;
+    private static final float READING_FOCUS_STEP = 0.08F;
+    private static final float FOCUS_RELEASE_STEP = 0.18F;
+    private static final float READING_FOCUS_AMOUNT = 0.38F;
+    private static final int READING_FOCUS_CYCLE_TICKS = 52;
     private static BlockPos lastLookedBlock;
     private static BlockPos activeBlock;
     private static int lastLookedBlockTick;
@@ -34,10 +39,17 @@ public final class BlockInteractionEyeFocus {
         }
 
         rememberLookedBlock(client);
+        if (isReadingScreen(client.screen)) {
+            activeBlock = null;
+            hadBlockInteractionScreen = false;
+            updateFocus(readingFocus(), READING_FOCUS_STEP);
+            return;
+        }
+
         if (!isBlockInteractionScreen(client.screen)) {
             activeBlock = null;
             hadBlockInteractionScreen = false;
-            updateFocus(0.0F);
+            updateFocus(0.0F, FOCUS_RELEASE_STEP);
             return;
         }
 
@@ -46,7 +58,7 @@ public final class BlockInteractionEyeFocus {
             hadBlockInteractionScreen = true;
         }
 
-        updateFocus(activeBlock == null ? 0.0F : calculateFocus(player, activeBlock));
+        updateFocus(activeBlock == null ? 0.0F : calculateFocus(player, activeBlock), BLOCK_FOCUS_STEP);
     }
 
     public static float localFocusAmount() {
@@ -67,6 +79,32 @@ public final class BlockInteractionEyeFocus {
 
         String screenName = screen.getClass().getName();
         return !screenName.endsWith("InventoryScreen") && !screenName.endsWith("CreativeModeInventoryScreen");
+    }
+
+    private static boolean isReadingScreen(Screen screen) {
+        if (screen == null) {
+            return false;
+        }
+
+        String screenName = screen.getClass().getName();
+        return screenName.endsWith("BookViewScreen")
+            || screenName.endsWith("BookEditScreen")
+            || screenName.endsWith("SignEditScreen")
+            || screenName.endsWith("HangingSignEditScreen");
+    }
+
+    private static float readingFocus() {
+        int phase = Math.floorMod(ticks, READING_FOCUS_CYCLE_TICKS);
+        if (phase < 18) {
+            return -READING_FOCUS_AMOUNT;
+        }
+        if (phase < 26) {
+            return 0.0F;
+        }
+        if (phase < 44) {
+            return READING_FOCUS_AMOUNT;
+        }
+        return 0.0F;
     }
 
     private static float calculateFocus(LocalPlayer player, BlockPos blockPos) {
@@ -90,9 +128,9 @@ public final class BlockInteractionEyeFocus {
         return Math.abs(focus) < FOCUS_DEAD_ZONE ? 0.0F : focus;
     }
 
-    private static void updateFocus(float focus) {
-        localFocusAmount = focus;
-        int quantizedFocus = Math.round(focus * 100.0F);
+    private static void updateFocus(float focus, float step) {
+        localFocusAmount = approach(localFocusAmount, focus, step);
+        int quantizedFocus = Math.round(localFocusAmount * 100.0F);
         if (quantizedFocus != lastSentFocus) {
             lastSentFocus = quantizedFocus;
             ReactionsNetworking.sendLocalEyeFocus(quantizedFocus);
@@ -104,7 +142,26 @@ public final class BlockInteractionEyeFocus {
         activeBlock = null;
         lastLookedBlockTick = 0;
         hadBlockInteractionScreen = false;
-        updateFocus(0.0F);
+        setFocus(0.0F);
+    }
+
+    private static void setFocus(float focus) {
+        localFocusAmount = focus;
+        int quantizedFocus = Math.round(focus * 100.0F);
+        if (quantizedFocus != lastSentFocus) {
+            lastSentFocus = quantizedFocus;
+            ReactionsNetworking.sendLocalEyeFocus(quantizedFocus);
+        }
+    }
+
+    private static float approach(float current, float target, float step) {
+        if (current < target) {
+            return Math.min(target, current + step);
+        }
+        if (current > target) {
+            return Math.max(target, current - step);
+        }
+        return current;
     }
 
     private static double clamp(double value, double min, double max) {

@@ -41,7 +41,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final float FALL_SURPRISE_DISTANCE = 3.0F;
     private static final float VISIBLE_FALL_SURPRISE_DISTANCE = 1.2F;
     private static final double FALL_SURPRISE_SPEED = -0.35D;
-    private static final int FALL_SURPRISE_MIN_TICKS = 12;
+    private static final int FALL_SURPRISE_MIN_TICKS = 30;
     private static final int LANDING_BLINK_TICKS = 7;
     private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, 11, 14, 12, 14, 10, 11, 2, 1);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();

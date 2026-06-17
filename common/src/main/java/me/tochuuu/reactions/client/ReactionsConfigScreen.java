@@ -119,7 +119,7 @@ public final class ReactionsConfigScreen extends Screen {
         int actionY = denseLayout ? y + buttonHeight + actionGap : Math.min(this.height - 50, y + buttonHeight + actionGap);
         addRenderableWidget(Button.builder(Component.literal("Beta"), button -> {
             if (this.minecraft != null) {
-                this.minecraft.setScreen(new ReactionsBetaAnimationsScreen(this));
+                this.minecraft.gui.setScreen(new ReactionsBetaAnimationsScreen(this));
             }
         }).bounds(panelX, actionY, half, buttonHeight).build());
         addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
@@ -191,7 +191,7 @@ public final class ReactionsConfigScreen extends Screen {
         int third = Math.max(1, (panelWidth - GAP * 2) / 3);
         addRenderableWidget(Button.builder(Component.literal("Beta"), button -> {
             if (this.minecraft != null) {
-                this.minecraft.setScreen(new ReactionsBetaAnimationsScreen(this));
+                this.minecraft.gui.setScreen(new ReactionsBetaAnimationsScreen(this));
             }
         }).bounds(panelX, bottomY, third, buttonHeight).build());
         addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
@@ -416,7 +416,7 @@ public final class ReactionsConfigScreen extends Screen {
     public void onClose() {
         ReactionsClientConfig.save();
         if (this.minecraft != null) {
-            this.minecraft.setScreen(parent);
+            this.minecraft.gui.setScreen(parent);
         }
     }
 

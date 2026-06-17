@@ -41,7 +41,7 @@ public final class ReactionsBetaAnimationsScreen extends Screen {
     public void onClose() {
         ReactionsClientConfig.save();
         if (this.minecraft != null) {
-            this.minecraft.setScreen(parent);
+            this.minecraft.gui.setScreen(parent);
         }
     }
 

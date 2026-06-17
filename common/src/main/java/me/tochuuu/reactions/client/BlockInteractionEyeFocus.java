@@ -39,14 +39,14 @@ public final class BlockInteractionEyeFocus {
         }
 
         rememberLookedBlock(client);
-        if (isReadingScreen(client.screen)) {
+        if (isReadingScreen(client.gui.screen())) {
             activeBlock = null;
             hadBlockInteractionScreen = false;
             updateFocus(readingFocus(), READING_FOCUS_STEP);
             return;
         }
 
-        if (!isBlockInteractionScreen(client.screen)) {
+        if (!isBlockInteractionScreen(client.gui.screen())) {
             activeBlock = null;
             hadBlockInteractionScreen = false;
             updateFocus(0.0F, FOCUS_RELEASE_STEP);

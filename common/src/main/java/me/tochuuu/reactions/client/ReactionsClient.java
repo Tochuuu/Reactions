@@ -32,8 +32,8 @@ public final class ReactionsClient {
         BlockInteractionEyeFocus.onClientTick(client);
         while (OPEN_CONFIG.consumeClick()) {
             Minecraft minecraft = Minecraft.getInstance();
-            if (minecraft.screen == null) {
-                minecraft.setScreen(new ReactionsConfigScreen(null));
+            if (minecraft.gui.screen() == null) {
+                minecraft.gui.setScreen(new ReactionsConfigScreen(null));
             }
         }
     }

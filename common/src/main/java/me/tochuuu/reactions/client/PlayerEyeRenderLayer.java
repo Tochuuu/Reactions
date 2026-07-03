@@ -2,8 +2,10 @@ package me.tochuuu.reactions.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import me.tochuuu.reactions.mixin.ModelPartAccessor;
 import me.tochuuu.reactions.network.ReactionsNetworking;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
@@ -18,6 +20,13 @@ import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, PlayerModel> {
     private static final float SKIN_SIZE = 64.0F;
@@ -93,7 +102,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         }
 
         poseStack.pushPose();
-        getParentModel().head.translateAndRotate(poseStack);
+        translateToFacePose(poseStack);
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
         submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, EyeSide.LEFT, hurtSclera);
         submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, EyeSide.RIGHT, hurtSclera);
@@ -111,7 +120,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
 
     private void submitMouthOnly(PoseStack poseStack, SubmitNodeCollector collector, int light, AvatarRenderState state, RenderType renderType, boolean animationsEnabled, EyeSettings eyes) {
         poseStack.pushPose();
-        getParentModel().head.translateAndRotate(poseStack);
+        translateToFacePose(poseStack);
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
         if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
@@ -124,6 +133,18 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             }
         }
         poseStack.popPose();
+    }
+
+    private void translateToFacePose(PoseStack poseStack) {
+        PlayerModel model = getParentModel();
+        if (EMFCompatibility.translateToReplacementHeadFace(model, poseStack)) {
+            return;
+        }
+        if (EMFCompatibility.translateToHeadFace(model, poseStack)) {
+            return;
+        }
+
+        model.head.translateAndRotate(poseStack);
     }
 
     private static void submitEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, EyeSide side, boolean hurtSclera) {
@@ -216,6 +237,296 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         RIGHT
     }
 
+    private static final class EMFCompatibility {
+        private static final String EMF_MODEL_CLASS = "traben.entity_model_features.models.IEMFModel";
+        private static final String EMF_CUSTOM_PART_CLASS = "traben.entity_model_features.models.parts.EMFModelPartCustom";
+
+        private static Method isEmfModelMethod;
+        private static Method rootModelMethod;
+        private static Method allVanillaPartsMethod;
+        private static Field nameField;
+        private static Field idField;
+        private static Field attachField;
+        private static Field partToBeAttachedField;
+        private static boolean methodsUnavailable;
+
+        private static ModelPart headPart(Object root, ModelPart fallback) throws ReflectiveOperationException {
+            Method partsMethod = allVanillaPartsMethod;
+            if (partsMethod == null) {
+                partsMethod = root.getClass().getMethod("getAllVanillaPartsEMF");
+                allVanillaPartsMethod = partsMethod;
+            }
+            Object parts = partsMethod.invoke(root);
+            if (!(parts instanceof Collection<?> collection)) {
+                return fallback;
+            }
+
+            for (Object part : collection) {
+                if (part instanceof ModelPart modelPart && "head".equals(partName(part))) {
+                    return modelPart;
+                }
+            }
+            return fallback;
+        }
+
+        private static boolean translateToReplacementHeadFace(PlayerModel model, PoseStack poseStack) {
+            try {
+                ModelPart rootPart = rootPart(model);
+                if (rootPart == null) {
+                    return false;
+                }
+
+                ModelPart headPart = headPart(rootPart, null);
+                if (headPart == null) {
+                    return false;
+                }
+
+                FaceAnchor faceAnchor = replacementHeadFaceAnchor(headPart);
+                if (faceAnchor == null) {
+                    return false;
+                }
+
+                rootPart.translateAndRotate(poseStack);
+                headPart.translateAndRotate(poseStack);
+                for (ModelPart part : faceAnchor.path()) {
+                    part.translateAndRotate(poseStack);
+                }
+                faceAnchor.bounds().applyToVanillaFace(poseStack);
+                return true;
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+            }
+            return false;
+        }
+
+        private static boolean translateToHeadFace(PlayerModel model, PoseStack poseStack) {
+            try {
+                ModelPart rootPart = rootPart(model);
+                if (rootPart == null) {
+                    return false;
+                }
+
+                ModelPart headPart = headPart(rootPart, null);
+                if (headPart == null) {
+                    return false;
+                }
+
+                rootPart.translateAndRotate(poseStack);
+                headPart.translateAndRotate(poseStack);
+                return true;
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+            }
+            return false;
+        }
+
+        private static ModelPart rootPart(PlayerModel model) throws ReflectiveOperationException {
+            Object root = rootModel(model);
+            return root instanceof ModelPart modelPart ? modelPart : null;
+        }
+
+        private static FaceAnchor replacementHeadFaceAnchor(ModelPart headPart) throws ReflectiveOperationException {
+            Map<?, ?> children = ((ModelPartAccessor) (Object) headPart).reactions$children();
+            if (children == null || children.isEmpty()) {
+                return null;
+            }
+
+            FaceAnchor best = null;
+            for (Object child : children.values()) {
+                if (!(child instanceof ModelPart modelPart) || !isReplacementHeadChild(child)) {
+                    continue;
+                }
+
+                FaceAnchor anchor = FaceAnchor.find(modelPart);
+                if (anchor == null && "head".equals(customPartId(child))) {
+                    anchor = FaceAnchor.virtualHead(modelPart);
+                }
+                best = FaceAnchor.better(best, anchor);
+            }
+            return best;
+        }
+
+        private static boolean isReplacementHeadChild(Object child) throws ReflectiveOperationException {
+            Class<?> customPartClass;
+            try {
+                customPartClass = Class.forName(EMF_CUSTOM_PART_CLASS, false, child.getClass().getClassLoader());
+            } catch (ClassNotFoundException ignored) {
+                return false;
+            }
+            if (!customPartClass.isInstance(child)) {
+                return false;
+            }
+
+            Field attach = attachField;
+            if (attach == null) {
+                attach = findField(customPartClass, "attach");
+                attach.setAccessible(true);
+                attachField = attach;
+            }
+            if (Boolean.TRUE.equals(attach.get(child))) {
+                return false;
+            }
+
+            Field partToBeAttached = partToBeAttachedField;
+            if (partToBeAttached == null) {
+                partToBeAttached = findField(customPartClass, "partToBeAttached");
+                partToBeAttached.setAccessible(true);
+                partToBeAttachedField = partToBeAttached;
+            }
+            return "head".equals(partToBeAttached.get(child));
+        }
+
+        private static String customPartId(Object part) throws ReflectiveOperationException {
+            Field field = idField;
+            if (field == null) {
+                field = findField(part.getClass(), "id");
+                field.setAccessible(true);
+                idField = field;
+            }
+            Object value = field.get(part);
+            return value instanceof String id ? id : null;
+        }
+
+        private static Object rootModel(PlayerModel model) throws ReflectiveOperationException {
+            if (methodsUnavailable) {
+                return null;
+            }
+
+            Class<?> emfModelClass;
+            try {
+                emfModelClass = Class.forName(EMF_MODEL_CLASS, false, model.getClass().getClassLoader());
+            } catch (ClassNotFoundException ignored) {
+                methodsUnavailable = true;
+                return null;
+            }
+            if (!emfModelClass.isInstance(model)) {
+                return null;
+            }
+
+            Method isMethod = isEmfModelMethod;
+            if (isMethod == null) {
+                isMethod = emfModelClass.getMethod("emf$isEMFModel");
+                isEmfModelMethod = isMethod;
+            }
+            if (!Boolean.TRUE.equals(isMethod.invoke(model))) {
+                return null;
+            }
+
+            Method rootMethod = rootModelMethod;
+            if (rootMethod == null) {
+                rootMethod = emfModelClass.getMethod("emf$getEMFRootModel");
+                rootModelMethod = rootMethod;
+            }
+            return rootMethod.invoke(model);
+        }
+
+        private static String partName(Object part) throws ReflectiveOperationException {
+            Field field = nameField;
+            if (field == null) {
+                field = findField(part.getClass(), "name");
+                field.setAccessible(true);
+                nameField = field;
+            }
+            Object value = field.get(part);
+            return value instanceof String name ? name : null;
+        }
+
+        private static Field findField(Class<?> type, String name) throws NoSuchFieldException {
+            Class<?> current = type;
+            while (current != null) {
+                try {
+                    return current.getDeclaredField(name);
+                } catch (NoSuchFieldException ignored) {
+                    current = current.getSuperclass();
+                }
+            }
+            throw new NoSuchFieldException(name);
+        }
+
+        private record FaceAnchor(List<ModelPart> path, FaceBounds bounds, float score) {
+            private static FaceAnchor find(ModelPart root) {
+                return find(root, new ArrayList<>(), 0);
+            }
+
+            private static FaceAnchor virtualHead(ModelPart root) {
+                return new FaceAnchor(List.of(root), FaceBounds.VIRTUAL_HEAD, 100.0F);
+            }
+
+            private static FaceAnchor find(ModelPart part, List<ModelPart> path, int depth) {
+                path.add(part);
+                FaceAnchor best = null;
+
+                List<ModelPart.Cube> cubes = ((ModelPartAccessor) (Object) part).reactions$cubes();
+                if (cubes != null) {
+                    for (ModelPart.Cube cube : cubes) {
+                        FaceBounds bounds = FaceBounds.fromNorthFace(cube);
+                        if (bounds != null) {
+                            best = better(best, new FaceAnchor(List.copyOf(path), bounds, bounds.score(depth)));
+                        }
+                    }
+                }
+
+                Map<?, ?> children = ((ModelPartAccessor) (Object) part).reactions$children();
+                if (children != null) {
+                    for (Object child : children.values()) {
+                        if (child instanceof ModelPart childPart) {
+                            best = better(best, find(childPart, path, depth + 1));
+                        }
+                    }
+                }
+
+                path.remove(path.size() - 1);
+                return best;
+            }
+
+            private static FaceAnchor better(FaceAnchor current, FaceAnchor candidate) {
+                if (candidate == null) {
+                    return current;
+                }
+                return current == null || candidate.score < current.score ? candidate : current;
+            }
+        }
+
+        private record FaceBounds(float minX, float minY, float minZ, float maxX, float maxY) {
+            private static FaceBounds fromNorthFace(ModelPart.Cube cube) {
+                float minX = Math.min(cube.minX, cube.maxX);
+                float minY = Math.min(cube.minY, cube.maxY);
+                float minZ = Math.min(cube.minZ, cube.maxZ);
+                float maxX = Math.max(cube.minX, cube.maxX);
+                float maxY = Math.max(cube.minY, cube.maxY);
+                float width = maxX - minX;
+                float height = maxY - minY;
+                if (width < 4.0F || height < 4.0F) {
+                    return null;
+                }
+                return new FaceBounds(minX, minY, minZ, maxX, maxY);
+            }
+
+            private float score(int depth) {
+                float width = maxX - minX;
+                float height = maxY - minY;
+                float centerX = (minX + maxX) * 0.5F;
+                float centerY = (minY + maxY) * 0.5F;
+                return Math.abs(width - 8.0F) * 4.0F
+                    + Math.abs(height - 8.0F) * 4.0F
+                    + Math.abs(centerX) * 1.5F
+                    + Math.abs(centerY + 4.0F) * 1.5F
+                    + Math.max(0.0F, 6.0F - width) * 8.0F
+                    + Math.max(0.0F, 6.0F - height) * 8.0F
+                    + depth * 0.25F;
+            }
+
+            private void applyToVanillaFace(PoseStack poseStack) {
+                float xScale = Math.max((maxX - minX) / 8.0F, 1.0E-4F);
+                float yScale = Math.max((maxY - minY) / 8.0F, 1.0E-4F);
+                float xOffset = minX + 4.0F * xScale;
+                float yOffset = minY + 8.0F * yScale;
+                float zOffset = minZ + 4.0F;
+                poseStack.translate(xOffset / 16.0F, yOffset / 16.0F, zOffset / 16.0F);
+                poseStack.scale(xScale, yScale, 1.0F);
+            }
+
+            private static final FaceBounds VIRTUAL_HEAD = new FaceBounds(-4.0F, -32.0F, -4.0F, 4.0F, -24.0F);
+        }
+    }
 
     private static void quad(VertexConsumer consumer, PoseStack.Pose pose, float x1, float y1, float x2, float y2, float u1, float v1, float u2, float v2, int light, int overlay, int color) {
         vertex(consumer, pose, x1, y2, u1, v2, light, overlay, color);

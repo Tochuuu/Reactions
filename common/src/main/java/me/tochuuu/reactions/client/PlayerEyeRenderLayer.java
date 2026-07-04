@@ -91,7 +91,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         boolean useDefaultOfflineEyes = !isSelf && remoteConfig == null && playerOverride == null && !canSyncWithServer && isDefaultPlayerSkin(texture);
         if (!isSelf && remoteConfig == null && !useDefaultOfflineEyes && (playerOverride == null || !playerOverride.enabled)) {
             if (config.showMouth) {
-                renderMouthOnly(poseStack, bufferSource, light, player, renderType(texture), config.animateOthers, EyeSettings.local(config));
+                renderMouthOnly(poseStack, bufferSource, light, player, renderType(texture), config.animateOthers && config.animateMouth, EyeSettings.local(config));
             }
             return;
         }
@@ -99,6 +99,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
 
         RenderType renderType = renderType(texture);
         boolean animationsEnabled = isSelf ? config.animateSelf : config.animateOthers;
+        boolean mouthAnimationsEnabled = animationsEnabled && config.animateMouth;
         boolean sleeping = player.isSleeping();
         FallEyeReaction fallReaction = animationsEnabled ? fallReaction(player, ageInTicks) : FallEyeReaction.NONE;
         boolean blinking = !sleeping && animationsEnabled && (isBlinking(player, ageInTicks, config) || fallReaction == FallEyeReaction.LANDING_BLINK);
@@ -109,7 +110,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(player, bowArm);
         DamageEyeReaction damageReaction = animationsEnabled ? damageReaction(player.getId(), player.hurtTime > 0, ageInTicks) : DamageEyeReaction.NONE;
         boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallReaction == FallEyeReaction.SURPRISE;
-        MouthUseAnimation mouthUseAnimation = animationsEnabled ? mouthUseAnimation(player) : MouthUseAnimation.NONE;
+        MouthUseAnimation mouthUseAnimation = mouthAnimationsEnabled ? mouthUseAnimation(player) : MouthUseAnimation.NONE;
         EyeExpression leftEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, bowSquint);
         EyeExpression rightEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, bowSquint);
         if (damageReaction == DamageEyeReaction.CLOSED) {
@@ -124,10 +125,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         int overlay = LivingEntityRenderer.getOverlayCoords(player, 0.0F);
         submitEye(poseStack, consumer, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, EyeSide.LEFT, hurtSclera);
         submitEye(poseStack, consumer, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, EyeSide.RIGHT, hurtSclera);
-        if (animationsEnabled && AdvancementMouthReaction.active(player.getId())) {
+        if (mouthAnimationsEnabled && AdvancementMouthReaction.active(player.getId())) {
             submitAdvancementMouth(poseStack, consumer, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
-            if (animationsEnabled && mouthUseAnimation != MouthUseAnimation.NONE) {
+            if (mouthAnimationsEnabled && mouthUseAnimation != MouthUseAnimation.NONE) {
                 submitUseMouth(poseStack, consumer, light, overlay, eyes, mouthUseAnimation, ageInTicks, player.getId());
             } else {
                 submitMouth(poseStack, consumer, light, overlay, eyes);

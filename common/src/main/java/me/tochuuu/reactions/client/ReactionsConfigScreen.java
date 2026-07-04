@@ -74,7 +74,7 @@ public final class ReactionsConfigScreen extends Screen {
         int sectionGap = denseLayout ? 4 : 14;
         int actionGap = denseLayout ? 4 : 18;
         int doneY = this.height - 26;
-        int controlHeight = buttonHeight * 7 + rowGap * 4 + sectionGap + actionGap;
+        int controlHeight = buttonHeight * 8 + rowGap * 5 + sectionGap + actionGap;
 
         layoutButtonHeight = buttonHeight;
         int availableFaceWidth = this.width - PANEL_WIDTH - 52;
@@ -105,6 +105,9 @@ public final class ReactionsConfigScreen extends Screen {
         y += buttonHeight + rowGap;
         addToggle(panelX, y, half, selfAnimationText(), () -> ReactionsClientConfig.get().animateSelf = !ReactionsClientConfig.get().animateSelf, buttonHeight);
         addToggle(panelX + half + GAP, y, half, otherAnimationText(), () -> ReactionsClientConfig.get().animateOthers = !ReactionsClientConfig.get().animateOthers, buttonHeight);
+
+        y += buttonHeight + rowGap;
+        addToggle(panelX, y, panelWidth, mouthAnimationText(), () -> ReactionsClientConfig.get().animateMouth = !ReactionsClientConfig.get().animateMouth, buttonHeight);
 
         y += buttonHeight + rowGap;
         addModeButton(EditMode.LEFT_EYE, panelX, y, half, buttonHeight);
@@ -154,7 +157,7 @@ public final class ReactionsConfigScreen extends Screen {
         int minFaceSize = ultraCompact ? 16 : shortWindow ? 24 : 40;
         int sizeGap = ultraCompact ? 4 : 7;
         int actionGap = ultraCompact ? 1 : shortWindow ? 3 : 6;
-        int controlsHeight = buttonHeight * 7 + rowGap * 4 + sizeGap + actionGap;
+        int controlsHeight = buttonHeight * 8 + rowGap * 5 + sizeGap + actionGap;
 
         faceSize = Math.min(maxFaceSize, Math.max(minFaceSize, Math.min(this.width - 24, this.height - topY - faceGap - controlsHeight - 4)));
         pixelSize = Math.max(1, faceSize / FACE_PIXELS);
@@ -184,6 +187,9 @@ public final class ReactionsConfigScreen extends Screen {
         y += buttonHeight + rowGap;
         addToggle(panelX, y, half, selfAnimationText(), () -> ReactionsClientConfig.get().animateSelf = !ReactionsClientConfig.get().animateSelf, buttonHeight);
         addToggle(panelX + half + GAP, y, half, otherAnimationText(), () -> ReactionsClientConfig.get().animateOthers = !ReactionsClientConfig.get().animateOthers, buttonHeight);
+
+        y += buttonHeight + rowGap;
+        addToggle(panelX, y, panelWidth, mouthAnimationText(), () -> ReactionsClientConfig.get().animateMouth = !ReactionsClientConfig.get().animateMouth, buttonHeight);
 
         y += buttonHeight + sizeGap;
         sizeHeaderY = y - Math.max(4, sizeGap);
@@ -403,19 +409,23 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     private Component enabledText() {
-        return Component.literal("Mod " + onOff(ReactionsClientConfig.get().enabled));
+        return Component.literal("Mod: " + onOff(ReactionsClientConfig.get().enabled));
     }
 
     private Component selfAnimationText() {
-        return Component.literal("Self " + onOff(ReactionsClientConfig.get().animateSelf));
+        return Component.literal("Self anims: " + onOff(ReactionsClientConfig.get().animateSelf));
     }
 
     private Component otherAnimationText() {
-        return Component.literal("Others " + onOff(ReactionsClientConfig.get().animateOthers));
+        return Component.literal("Other anims: " + onOff(ReactionsClientConfig.get().animateOthers));
     }
 
     private Component mouthText() {
-        return Component.literal("Mouth " + onOff(ReactionsClientConfig.get().showMouth));
+        return Component.literal("Mouth: " + onOff(ReactionsClientConfig.get().showMouth));
+    }
+
+    private Component mouthAnimationText() {
+        return Component.literal("Mouth anims: " + onOff(ReactionsClientConfig.get().animateMouth));
     }
 
     private Component modeText(EditMode targetMode) {

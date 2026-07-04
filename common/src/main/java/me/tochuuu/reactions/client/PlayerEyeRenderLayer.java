@@ -74,7 +74,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         boolean useDefaultOfflineEyes = !isSelf && remoteConfig == null && playerOverride == null && !canSyncWithServer && isDefaultPlayerSkin(texture);
         if (!isSelf && remoteConfig == null && !useDefaultOfflineEyes && (playerOverride == null || !playerOverride.enabled)) {
             if (config.showMouth) {
-                renderMouthOnly(poseStack, bufferSource, light, state, renderType(texture), config.animateOthers, EyeSettings.local(config));
+                renderMouthOnly(poseStack, bufferSource, light, state, renderType(texture), config.animateOthers && config.animateMouth, EyeSettings.local(config));
             }
             return;
         }
@@ -82,6 +82,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
 
         RenderType renderType = renderType(texture);
         boolean animationsEnabled = isSelf ? config.animateSelf : config.animateOthers;
+        boolean mouthAnimationsEnabled = animationsEnabled && config.animateMouth;
         boolean sleeping = state.hasPose(Pose.SLEEPING);
         PlayerActionAnimationState.Snapshot actionState = PlayerActionAnimationState.snapshot(state.id);
         boolean blinking = !sleeping && animationsEnabled && (isBlinking(state, config) || actionState.landingBlink());
@@ -105,10 +106,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
         submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, EyeSide.LEFT, hurtSclera);
         submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, EyeSide.RIGHT, hurtSclera);
-        if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
+        if (mouthAnimationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, bufferSource, renderType, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
-            if (animationsEnabled && actionState.mouthUseAnimation() != PlayerActionAnimationState.MouthUseAnimation.NONE) {
+            if (mouthAnimationsEnabled && actionState.mouthUseAnimation() != PlayerActionAnimationState.MouthUseAnimation.NONE) {
                 submitUseMouth(poseStack, bufferSource, renderType, light, overlay, eyes, actionState.mouthUseAnimation(), state.ageInTicks, state.id);
             } else {
                 submitMouth(poseStack, bufferSource, renderType, light, overlay, eyes);

@@ -11,7 +11,7 @@ public final class ReactionsBetaAnimationsScreen extends Screen {
     private final Screen parent;
 
     public ReactionsBetaAnimationsScreen(Screen parent) {
-        super(Component.literal("Beta animations"));
+        super(Component.translatable("screen.reactions.beta_animations"));
         this.parent = parent;
     }
 
@@ -28,7 +28,7 @@ public final class ReactionsBetaAnimationsScreen extends Screen {
         }).bounds(x, y, panelWidth, 20).build());
 
         int backY = Math.min(Math.max(y + 24, this.height - 30), this.height - 24);
-        addRenderableWidget(Button.builder(Component.literal("Back"), button -> onClose()).bounds(this.width / 2 - 45, backY, 90, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.back"), button -> onClose()).bounds(this.width / 2 - 45, backY, 90, 20).build());
     }
 
     @Override
@@ -46,10 +46,10 @@ public final class ReactionsBetaAnimationsScreen extends Screen {
     }
 
     private Component bowShootingAnimationText() {
-        return Component.literal("Bow squint: " + onOff(ReactionsClientConfig.get().animateBowShooting));
+        return Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.bow_squint"), onOff(ReactionsClientConfig.get().animateBowShooting));
     }
 
-    private static String onOff(boolean enabled) {
-        return enabled ? "On" : "Off";
+    private static Component onOff(boolean enabled) {
+        return Component.translatable(enabled ? "gui.reactions.on" : "gui.reactions.off");
     }
 }

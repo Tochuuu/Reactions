@@ -1,5 +1,7 @@
 package me.tochuuu.reactions.client;
 
+import com.mojang.authlib.GameProfile;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
@@ -9,6 +11,9 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.entity.player.PlayerSkin;
+
+import java.util.function.Supplier;
 
 public final class ReactionsConfigScreen extends Screen {
     private static final int FACE_U = 8;
@@ -42,6 +47,8 @@ public final class ReactionsConfigScreen extends Screen {
     private int sizeLimitMessageTicks;
     private boolean compactLayout;
     private boolean denseLayout;
+    private GameProfile menuSkinProfile;
+    private Supplier<PlayerSkin> menuSkinLookup;
 
     public ReactionsConfigScreen(Screen parent) {
         super(Component.literal("Reactions"));
@@ -366,7 +373,30 @@ public final class ReactionsConfigScreen extends Screen {
         if (this.minecraft != null && this.minecraft.player != null) {
             return this.minecraft.player.getSkin().body().texturePath();
         }
+        Supplier<PlayerSkin> lookup = menuSkinLookup();
+        if (lookup != null) {
+            PlayerSkin skin = lookup.get();
+            if (skin != null && skin.body() != null) {
+                return skin.body().texturePath();
+            }
+        }
         return MinecraftFallbacks.DEFAULT_SKIN;
+    }
+
+    private Supplier<PlayerSkin> menuSkinLookup() {
+        if (this.minecraft == null) {
+            return null;
+        }
+        Minecraft minecraft = this.minecraft;
+        GameProfile profile = minecraft.getGameProfile();
+        if (profile == null) {
+            return null;
+        }
+        if (menuSkinLookup == null || menuSkinProfile != profile) {
+            menuSkinProfile = profile;
+            menuSkinLookup = minecraft.getSkinManager().createLookup(profile, false);
+        }
+        return menuSkinLookup;
     }
 
     private boolean isInsideFace(double mouseX, double mouseY) {

@@ -51,7 +51,7 @@ public final class ReactionsConfigScreen extends Screen {
     private Supplier<PlayerSkin> menuSkinLookup;
 
     public ReactionsConfigScreen(Screen parent) {
-        super(Component.literal("Reactions"));
+        super(Component.translatable("screen.reactions.config"));
         this.parent = parent;
     }
 
@@ -130,18 +130,18 @@ public final class ReactionsConfigScreen extends Screen {
         addSizeButton(panelX + panelWidth - buttonHeight, y, false, 1, buttonHeight);
 
         int actionY = denseLayout ? y + buttonHeight + actionGap : Math.min(this.height - 50, y + buttonHeight + actionGap);
-        addRenderableWidget(Button.builder(Component.literal("Beta"), button -> {
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.beta"), button -> {
             if (this.minecraft != null) {
                 this.minecraft.setScreen(new ReactionsBetaAnimationsScreen(this));
             }
         }).bounds(panelX, actionY, half, buttonHeight).build());
-        addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.reset"), button -> {
             ReactionsClientConfig.reset();
             mode = EditMode.LEFT_EYE;
             rebuildWidgets();
         }).bounds(panelX + half + GAP, actionY, half, buttonHeight).build());
 
-        addRenderableWidget(Button.builder(Component.literal("Done"), button -> {
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.done"), button -> {
             ReactionsClientConfig.save();
             onClose();
         }).bounds(this.width / 2 - 48, doneY, 96, buttonHeight).build());
@@ -205,17 +205,17 @@ public final class ReactionsConfigScreen extends Screen {
 
         int bottomY = y + buttonHeight + actionGap;
         int third = Math.max(1, (panelWidth - GAP * 2) / 3);
-        addRenderableWidget(Button.builder(Component.literal("Beta"), button -> {
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.beta"), button -> {
             if (this.minecraft != null) {
                 this.minecraft.setScreen(new ReactionsBetaAnimationsScreen(this));
             }
         }).bounds(panelX, bottomY, third, buttonHeight).build());
-        addRenderableWidget(Button.builder(Component.literal("Reset"), button -> {
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.reset"), button -> {
             ReactionsClientConfig.reset();
             mode = EditMode.LEFT_EYE;
             rebuildWidgets();
         }).bounds(panelX + third + GAP, bottomY, third, buttonHeight).build());
-        addRenderableWidget(Button.builder(Component.literal("Done"), button -> {
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.done"), button -> {
             ReactionsClientConfig.save();
             onClose();
         }).bounds(panelX + (third + GAP) * 2, bottomY, third, buttonHeight).build());
@@ -286,15 +286,15 @@ public final class ReactionsConfigScreen extends Screen {
 
         int labelY = faceY + faceSize + 8;
         if (!compactLayout && !denseLayout) {
-            graphics.drawString(this.font, Component.literal("Eyes " + config.eyeWidth + "x" + config.eyeHeight), faceX, labelY, 0xFFA0A0A0);
+            graphics.drawString(this.font, Component.translatable("gui.reactions.eye_size_value", config.eyeWidth, config.eyeHeight), faceX, labelY, 0xFFA0A0A0);
         }
         int rowTextOffset = Math.max(2, (layoutButtonHeight - 9) / 2);
-        graphics.drawString(this.font, Component.literal("Eye size"), panelX, sizeHeaderY, 0xFFA0A0A0);
-        graphics.drawString(this.font, Component.literal("Width: " + config.eyeWidth), panelX, eyeWidthRowY + rowTextOffset, 0xFFFFFFFF);
-        graphics.drawString(this.font, Component.literal("Height: " + config.eyeHeight), panelX, eyeHeightRowY + rowTextOffset, 0xFFFFFFFF);
+        graphics.drawString(this.font, Component.translatable("gui.reactions.eye_size"), panelX, sizeHeaderY, 0xFFA0A0A0);
+        graphics.drawString(this.font, Component.translatable("gui.reactions.eye_width", config.eyeWidth), panelX, eyeWidthRowY + rowTextOffset, 0xFFFFFFFF);
+        graphics.drawString(this.font, Component.translatable("gui.reactions.eye_height", config.eyeHeight), panelX, eyeHeightRowY + rowTextOffset, 0xFFFFFFFF);
 
         if (sizeLimitMessageTicks > 0) {
-            graphics.drawString(this.font, Component.literal("Eye size limit reached"), panelX, Math.min(this.height - 38, eyeHeightRowY + layoutButtonHeight + 4), 0xFFFF6060);
+            graphics.drawString(this.font, Component.translatable("gui.reactions.eye_size_limit_reached"), panelX, Math.min(this.height - 38, eyeHeightRowY + layoutButtonHeight + 4), 0xFFFF6060);
         }
     }
 
@@ -410,31 +410,36 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     private Component enabledText() {
-        return Component.literal("Mod: " + onOff(ReactionsClientConfig.get().enabled));
+        return toggleText("gui.reactions.mod", ReactionsClientConfig.get().enabled);
     }
 
     private Component selfAnimationText() {
-        return Component.literal("Self anims: " + onOff(ReactionsClientConfig.get().animateSelf));
+        return toggleText("gui.reactions.self_anims", ReactionsClientConfig.get().animateSelf);
     }
 
     private Component otherAnimationText() {
-        return Component.literal("Other anims: " + onOff(ReactionsClientConfig.get().animateOthers));
+        return toggleText("gui.reactions.other_anims", ReactionsClientConfig.get().animateOthers);
     }
 
     private Component mouthText() {
-        return Component.literal("Mouth: " + onOff(ReactionsClientConfig.get().showMouth));
+        return toggleText("gui.reactions.mouth", ReactionsClientConfig.get().showMouth);
     }
 
     private Component mouthAnimationText() {
-        return Component.literal("Mouth anims: " + onOff(ReactionsClientConfig.get().animateMouth));
+        return toggleText("gui.reactions.mouth_anims", ReactionsClientConfig.get().animateMouth);
     }
 
     private Component modeText(EditMode targetMode) {
-        return Component.literal((mode == targetMode ? "> " : "") + (compactLayout ? targetMode.shortLabel : targetMode.label));
+        Component label = Component.translatable(compactLayout ? targetMode.shortLabelKey : targetMode.labelKey);
+        return mode == targetMode ? Component.translatable("gui.reactions.selected", label) : label;
     }
 
-    private static String onOff(boolean enabled) {
-        return enabled ? "On" : "Off";
+    private static Component toggleText(String labelKey, boolean enabled) {
+        return Component.translatable("gui.reactions.toggle", Component.translatable(labelKey), onOff(enabled));
+    }
+
+    private static Component onOff(boolean enabled) {
+        return Component.translatable(enabled ? "gui.reactions.on" : "gui.reactions.off");
     }
 
     private static int clamp(int value, int min, int max) {
@@ -464,18 +469,18 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     private enum EditMode {
-        LEFT_EYE("Left eye", "L Eye", 0xFF43D17C),
-        RIGHT_EYE("Right eye", "R Eye", 0xFF4AA3FF),
-        MOUTH("Mouth", "Mouth", 0xFFFFD45A),
-        EYEDROPPER("Eyelid color", "Lid", 0xFFFFC94A);
+        LEFT_EYE("gui.reactions.edit.left_eye", "gui.reactions.edit.left_eye.short", 0xFF43D17C),
+        RIGHT_EYE("gui.reactions.edit.right_eye", "gui.reactions.edit.right_eye.short", 0xFF4AA3FF),
+        MOUTH("gui.reactions.edit.mouth", "gui.reactions.edit.mouth", 0xFFFFD45A),
+        EYEDROPPER("gui.reactions.edit.eyelid_color", "gui.reactions.edit.eyelid_color.short", 0xFFFFC94A);
 
-        private final String label;
-        private final String shortLabel;
+        private final String labelKey;
+        private final String shortLabelKey;
         private final int color;
 
-        EditMode(String label, String shortLabel, int color) {
-            this.label = label;
-            this.shortLabel = shortLabel;
+        EditMode(String labelKey, String shortLabelKey, int color) {
+            this.labelKey = labelKey;
+            this.shortLabelKey = shortLabelKey;
             this.color = color;
         }
     }

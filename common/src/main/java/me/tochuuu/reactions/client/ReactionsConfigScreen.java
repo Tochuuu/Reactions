@@ -22,7 +22,8 @@ public final class ReactionsConfigScreen extends Screen {
     private static final int BASE_FACE_SIZE = 160;
     private static final int MIN_FACE_SIZE = 72;
     private static final int COMPACT_FACE_SIZE = 48;
-    private static final int PANEL_WIDTH = 200;
+    private static final int PANEL_WIDTH = 224;
+    private static final int FACE_PANEL_GAP = 18;
     private static final int GAP = 8;
     private static final int BUTTON_HEIGHT = 20;
     private static final int MAX_EYE_WIDTH = 2;
@@ -77,13 +78,13 @@ public final class ReactionsConfigScreen extends Screen {
         int controlHeight = buttonHeight * 8 + rowGap * 5 + sectionGap + actionGap;
 
         layoutButtonHeight = buttonHeight;
-        int availableFaceWidth = this.width - PANEL_WIDTH - 52;
+        int availableFaceWidth = this.width - PANEL_WIDTH - FACE_PANEL_GAP - 28;
         int availableFaceHeight = this.height - (denseLayout ? 56 : 78);
         faceSize = clamp(Math.min(Math.min(BASE_FACE_SIZE, availableFaceWidth), availableFaceHeight), MIN_FACE_SIZE, BASE_FACE_SIZE);
         pixelSize = Math.max(1, faceSize / FACE_PIXELS);
         faceSize = pixelSize * FACE_PIXELS;
 
-        int contentWidth = faceSize + 24 + PANEL_WIDTH;
+        int contentWidth = faceSize + FACE_PANEL_GAP + PANEL_WIDTH;
         faceX = Math.max(12, this.width / 2 - contentWidth / 2);
         if (denseLayout) {
             int minPanelY = 28;
@@ -94,7 +95,7 @@ public final class ReactionsConfigScreen extends Screen {
             faceY = Math.max(36, Math.min(this.height - faceSize - 52, this.height / 2 - faceSize / 2));
             panelY = faceY + 4;
         }
-        panelX = faceX + faceSize + 24;
+        panelX = faceX + faceSize + FACE_PANEL_GAP;
         panelWidth = PANEL_WIDTH;
 
         int y = panelY;
@@ -165,7 +166,7 @@ public final class ReactionsConfigScreen extends Screen {
         faceX = Math.max(8, this.width / 2 - faceSize / 2);
         faceY = topY;
 
-        panelWidth = Math.min(shortWindow ? 240 : 280, this.width - 16);
+        panelWidth = Math.min(shortWindow ? 256 : 300, this.width - 16);
         panelX = Math.max(8, this.width / 2 - panelWidth / 2);
         panelY = faceY + faceSize + faceGap;
 
@@ -348,7 +349,10 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     private void drawMouthSelection(GuiGraphics graphics, int leftSkinX, int leftSkinY, int rightSkinX, int rightSkinY) {
-        int color = ReactionsClientConfig.get().showMouth ? 0xFFFFD45A : 0xFFBFA44A;
+        if (!ReactionsClientConfig.get().showMouth) {
+            return;
+        }
+        int color = 0xFFFFD45A;
         drawPixelSelection(graphics, leftSkinX, leftSkinY, color);
         drawPixelSelection(graphics, rightSkinX, rightSkinY, color);
     }

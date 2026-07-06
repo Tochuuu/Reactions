@@ -3,6 +3,7 @@ package me.tochuuu.reactions.client;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.annotations.SerializedName;
 import me.tochuuu.reactions.Reactions;
 import me.tochuuu.reactions.network.ReactionsNetworking;
 import net.minecraft.client.Minecraft;
@@ -24,6 +25,8 @@ public final class ReactionsClientConfig {
     public boolean animateSelf = true;
     public boolean animateOthers = true;
     public boolean animateBowShooting = false;
+    @SerializedName(value = "cleanEyelidColor", alternate = "naturalEyeColors")
+    public boolean cleanEyelidColor = false;
     public boolean showMouth = true;
     public boolean animateMouth = true;
     public int leftEyeX = 9;

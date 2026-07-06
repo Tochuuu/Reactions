@@ -13,6 +13,7 @@ import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -35,10 +36,14 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final float HEAD_FACE_Z = -4.004F / 16.0F;
     private static final float MOUTH_COVER_FACE_Z = -4.018F / 16.0F;
     private static final float MOUTH_FACE_Z = -4.026F / 16.0F;
+    private static final float EYE_UV_INSET = 0.24F;
     private static final float MOUTH_UV_INSET = 0.125F;
     private static final float ADVANCEMENT_MOUTH_TOP_EXTENSION = 0.001F;
     private static final int NORMAL_COLOR = 0xFFFFFFFF;
     private static final int EYELID_DARKEN_COLOR = 0xFFB0B0B0;
+    private static final int LARGE_EYELID_DARKEN_COLOR = 0xFFD0D0D0;
+    private static final float EYELID_COLUMN_SHADE_RANGE = 0.08F;
+    private static final float EYELID_TOP_SUBTLE_DARK_FACTOR = 0.97F;
     private static final int IDLE_LOOK_DELAY_TICKS = 240;
     private static final int IDLE_LOOK_STEP_TICKS = 14;
     private static final int IDLE_LOOK_ANIMATION_TICKS = IDLE_LOOK_STEP_TICKS * 3;
@@ -123,8 +128,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         translateToFacePose(poseStack);
         VertexConsumer consumer = bufferSource.getBuffer(renderType);
         int overlay = LivingEntityRenderer.getOverlayCoords(player, 0.0F);
-        submitEye(poseStack, consumer, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, EyeSide.LEFT, hurtSclera);
-        submitEye(poseStack, consumer, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, EyeSide.RIGHT, hurtSclera);
+        int eyeOverlay = config.cleanEyelidColor ? OverlayTexture.NO_OVERLAY : overlay;
+        int eyelidColor = eyelidColor(config, eyes.eyeHeight);
+        submitEye(poseStack, consumer, light, eyeOverlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, mirroredEye == -1, EyeSide.LEFT, hurtSclera, eyelidColor);
+        submitEye(poseStack, consumer, light, eyeOverlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, mirroredEye == 1, EyeSide.RIGHT, hurtSclera, eyelidColor);
         if (mouthAnimationsEnabled && AdvancementMouthReaction.active(player.getId())) {
             submitAdvancementMouth(poseStack, consumer, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
@@ -167,7 +174,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         model.head.translateAndRotate(poseStack);
     }
 
-    private static void submitEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, EyeSide side, boolean hurtSclera) {
+    private static void submitEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, boolean mirrored, EyeSide side, boolean hurtSclera, int eyelidColor) {
         int clampedSkinX = clamp(skinX, 0, (int) SKIN_SIZE - eyeWidth);
         int clampedSkinY = clamp(skinY, 0, (int) SKIN_SIZE - eyeHeight);
         int clampedEyelidSkinX = clamp(eyelidColorX, 0, (int) SKIN_SIZE - 1);
@@ -176,8 +183,13 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         float dstY1 = skinY - HEAD_FRONT_V - 8.0F;
         float dstY2 = dstY1 + eyeHeight;
 
+        if (expression == EyeExpression.CLOSED) {
+            submitEyelidTexture(poseStack, consumer, light, overlay, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, dstX1, dstY1, dstX1 + eyeWidth, dstY2, eyelidColor);
+            return;
+        }
+
         if (expression == EyeExpression.SQUINT) {
-            submitSquintEye(poseStack, consumer, light, overlay, clampedSkinX, clampedSkinY, clampedEyelidSkinX, clampedEyelidSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, mirrored);
+            submitSquintEye(poseStack, consumer, light, overlay, clampedSkinX, clampedSkinY, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, mirrored, eyelidColor);
             return;
         }
 
@@ -668,15 +680,87 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             .setNormal(pose, 0.0F, 0.0F, -1.0F);
     }
 
-    private static void submitSquintEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyelidX, int eyelidY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, boolean mirrored) {
+    private static void submitEyePiece(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, float sourceX, float sourceY, float sourceWidth, float sourceHeight, float dstX1, float dstY1, float dstX2, float dstY2, int color) {
+        float insetX = Math.min(EYE_UV_INSET, sourceWidth * 0.25F);
+        float insetY = Math.min(EYE_UV_INSET, sourceHeight * 0.25F);
+        float u1 = (sourceX + insetX) / SKIN_SIZE;
+        float v1 = (sourceY + insetY) / SKIN_SIZE;
+        float u2 = (sourceX + sourceWidth - insetX) / SKIN_SIZE;
+        float v2 = (sourceY + sourceHeight - insetY) / SKIN_SIZE;
+        quad(consumer, poseStack.last(), dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color);
+    }
+
+    private static void submitEyelidTexture(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int eyelidX, int eyelidY, int tileColumns, int tileRows, float dstX1, float dstY1, float dstX2, float dstY2, int color) {
+        int sourceX = clamp(eyelidX, 0, (int) SKIN_SIZE - 1);
+        int sourceY = clamp(eyelidY, 0, (int) SKIN_SIZE - 1);
+        int columns = Math.max(1, tileColumns);
+        int rows = Math.max(1, tileRows);
+        if (rows == 1) {
+            submitStretchedEyelidPixel(poseStack, consumer, light, overlay, sourceX, sourceY, dstX1, dstY1, dstX2, dstY2, color);
+            return;
+        }
+
+        float tileWidth = (dstX2 - dstX1) / columns;
+        float tileHeight = (dstY2 - dstY1) / rows;
+        for (int row = 0; row < rows; row++) {
+            float tileDstY1 = dstY1 + row * tileHeight;
+            float tileDstY2 = row == rows - 1 ? dstY2 : tileDstY1 + tileHeight;
+            for (int column = 0; column < columns; column++) {
+                int tileColor = eyelidTileColor(color, row, rows, column, columns);
+                float tileDstX1 = dstX1 + column * tileWidth;
+                float tileDstX2 = column == columns - 1 ? dstX2 : tileDstX1 + tileWidth;
+                submitEyePiece(poseStack, consumer, light, overlay, sourceX, sourceY, 1.0F, 1.0F, tileDstX1, tileDstY1, tileDstX2, tileDstY2, tileColor);
+            }
+        }
+    }
+
+    private static void submitStretchedEyelidPixel(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int sourceX, int sourceY, float dstX1, float dstY1, float dstX2, float dstY2, int color) {
+        float u1 = sourceX / SKIN_SIZE;
+        float v1 = sourceY / SKIN_SIZE;
+        float u2 = (sourceX + 1) / SKIN_SIZE;
+        float v2 = (sourceY + 1) / SKIN_SIZE;
+        quad(consumer, poseStack.last(), dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color);
+    }
+
+    private static int eyelidColor(ReactionsClientConfig config, int eyeHeight) {
+        if (config.cleanEyelidColor) {
+            return NORMAL_COLOR;
+        }
+        return eyeHeight > 1 ? LARGE_EYELID_DARKEN_COLOR : EYELID_DARKEN_COLOR;
+    }
+
+    private static int eyelidTileColor(int color, int row, int rows, int column, int columns) {
+        if (color == NORMAL_COLOR) {
+            return color;
+        }
+        float rowFactor = 1.0F;
+        if (rows > 1) {
+            float rowProgress = row / (float) (rows - 1);
+            rowFactor = EYELID_TOP_SUBTLE_DARK_FACTOR + (1.0F - EYELID_TOP_SUBTLE_DARK_FACTOR) * rowProgress;
+        }
+        float columnFactor = 1.0F;
+        if (columns > 1) {
+            float columnProgress = column / (float) (columns - 1);
+            columnFactor += (0.5F - Math.abs(columnProgress - 0.5F)) * EYELID_COLUMN_SHADE_RANGE;
+            columnFactor -= columnProgress * EYELID_COLUMN_SHADE_RANGE * 0.5F;
+        }
+        return multiplyColor(color, rowFactor * columnFactor);
+    }
+
+    private static int multiplyColor(int color, float factor) {
+        int alpha = color & 0xFF000000;
+        int red = clamp(Math.round(((color >>> 16) & 0xFF) * factor), 0, 255);
+        int green = clamp(Math.round(((color >>> 8) & 0xFF) * factor), 0, 255);
+        int blue = clamp(Math.round((color & 0xFF) * factor), 0, 255);
+        return alpha | red << 16 | green << 8 | blue;
+    }
+
+    private static void submitSquintEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyelidX, int eyelidY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, boolean mirrored, int eyelidColor) {
         float visibleHeight = Math.max(0.333F, (dstY2 - dstY1) * SQUINT_VISIBLE_EYE_COVERAGE);
         float splitY = Math.max(dstY1, dstY2 - visibleHeight);
         float dstX2 = dstX1 + eyeWidth;
-        float eyelidU1 = eyelidX / SKIN_SIZE;
-        float eyelidV1 = eyelidY / SKIN_SIZE;
-        float eyelidU2 = (eyelidX + 1) / SKIN_SIZE;
-        float eyelidV2 = (eyelidY + 1) / SKIN_SIZE;
-        quad(consumer, poseStack.last(), dstX1, dstY1, dstX2, splitY, eyelidU1, eyelidV1, eyelidU2, eyelidV2, light, overlay, EYELID_DARKEN_COLOR);
+        int eyelidSourceHeight = Math.max(1, Math.round(splitY - dstY1));
+        submitEyelidTexture(poseStack, consumer, light, overlay, eyelidX, eyelidY, eyeWidth, eyelidSourceHeight, dstX1, dstY1, dstX2, splitY, eyelidColor);
 
         float sourceVisibleHeight = eyeHeight * SQUINT_VISIBLE_EYE_COVERAGE;
         float sourceY1 = skinY + eyeHeight - sourceVisibleHeight;

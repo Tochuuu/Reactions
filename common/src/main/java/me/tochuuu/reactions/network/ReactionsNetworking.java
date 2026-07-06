@@ -24,6 +24,8 @@ public final class ReactionsNetworking {
     private static final Identifier EYE_FOCUS_S2C = Identifier.fromNamespaceAndPath(Reactions.MOD_ID, "eye_focus_s2c");
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
+    private static final int MIN_EYE_FOCUS = -101;
+    private static final int MAX_EYE_FOCUS = 101;
     private static final int CLIENT_SYNC_RETRY_TICKS = 20 * 30;
     private static final int SERVER_SYNC_RETRY_TICKS = 20 * 30;
     private static final Map<Integer, RemoteEyeConfig> CLIENT_CONFIGS = new HashMap<>();
@@ -60,7 +62,7 @@ public final class ReactionsNetworking {
     }
 
     public static void handleServerboundEyeFocus(EyeFocusC2SPayload payload, ServerPlayer serverPlayer) {
-        int focus = clamp(payload.focus(), -100, 100);
+        int focus = clamp(payload.focus(), MIN_EYE_FOCUS, MAX_EYE_FOCUS);
         if (focus == 0) {
             SERVER_EYE_FOCUSES.remove(serverPlayer.getUUID());
         } else {
@@ -194,7 +196,7 @@ public final class ReactionsNetworking {
     }
 
     public static void sendLocalEyeFocus(int focus) {
-        int clampedFocus = clamp(focus, -100, 100);
+        int clampedFocus = clamp(focus, MIN_EYE_FOCUS, MAX_EYE_FOCUS);
         syncIntegratedServerHostEyeFocus(clampedFocus);
         if (platform != null && platform.canSendEyeFocusToServer()) {
             platform.sendEyeFocusToServer(new EyeFocusC2SPayload(clampedFocus));
@@ -548,7 +550,7 @@ public final class ReactionsNetworking {
     }
 
     private static void applyRemoteEyeFocus(UUID playerId, int entityId, int focus) {
-        int clampedFocus = clamp(focus, -100, 100);
+        int clampedFocus = clamp(focus, MIN_EYE_FOCUS, MAX_EYE_FOCUS);
         if (clampedFocus == 0) {
             removeRemoteEyeFocus(playerId);
             return;
@@ -662,7 +664,7 @@ public final class ReactionsNetworking {
         }
 
         private void write(RegistryFriendlyByteBuf buf) {
-            buf.writeByte(clamp(focus, -100, 100));
+            buf.writeByte(clamp(focus, MIN_EYE_FOCUS, MAX_EYE_FOCUS));
         }
 
         @Override
@@ -676,7 +678,7 @@ public final class ReactionsNetworking {
         public static final StreamCodec<RegistryFriendlyByteBuf, EyeFocusS2CPayload> STREAM_CODEC = StreamCodec.ofMember(EyeFocusS2CPayload::write, EyeFocusS2CPayload::read);
 
         public static EyeFocusS2CPayload update(UUID playerId, int entityId, int focus) {
-            return new EyeFocusS2CPayload(UPDATE, playerId, entityId, clamp(focus, -100, 100));
+            return new EyeFocusS2CPayload(UPDATE, playerId, entityId, clamp(focus, MIN_EYE_FOCUS, MAX_EYE_FOCUS));
         }
 
         public static EyeFocusS2CPayload remove(UUID playerId) {

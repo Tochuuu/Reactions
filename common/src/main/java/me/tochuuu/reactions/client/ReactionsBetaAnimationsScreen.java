@@ -19,7 +19,7 @@ public final class ReactionsBetaAnimationsScreen extends Screen {
     protected void init() {
         int panelWidth = Math.max(90, Math.min(PANEL_WIDTH, this.width - 24));
         int x = this.width / 2 - panelWidth / 2;
-        int y = Math.min(Math.max(40, this.height / 2 - 24), this.height - 52);
+        int y = Math.min(Math.max(32, this.height / 2 - 36), Math.max(32, this.height - 76));
 
         addRenderableWidget(Button.builder(bowShootingAnimationText(), button -> {
             ReactionsClientConfig.get().animateBowShooting = !ReactionsClientConfig.get().animateBowShooting;
@@ -27,7 +27,13 @@ public final class ReactionsBetaAnimationsScreen extends Screen {
             rebuildWidgets();
         }).bounds(x, y, panelWidth, 20).build());
 
-        int backY = Math.min(Math.max(y + 24, this.height - 30), this.height - 24);
+        addRenderableWidget(Button.builder(cleanEyelidColorText(), button -> {
+            ReactionsClientConfig.get().cleanEyelidColor = !ReactionsClientConfig.get().cleanEyelidColor;
+            ReactionsClientConfig.save();
+            rebuildWidgets();
+        }).bounds(x, y + 24, panelWidth, 20).build());
+
+        int backY = Math.min(Math.max(y + 52, this.height - 30), this.height - 24);
         addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.back"), button -> onClose()).bounds(this.width / 2 - 45, backY, 90, 20).build());
     }
 
@@ -47,6 +53,10 @@ public final class ReactionsBetaAnimationsScreen extends Screen {
 
     private Component bowShootingAnimationText() {
         return Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.bow_squint"), onOff(ReactionsClientConfig.get().animateBowShooting));
+    }
+
+    private Component cleanEyelidColorText() {
+        return Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.eyelid_color"), onOff(ReactionsClientConfig.get().cleanEyelidColor));
     }
 
     private static Component onOff(boolean enabled) {

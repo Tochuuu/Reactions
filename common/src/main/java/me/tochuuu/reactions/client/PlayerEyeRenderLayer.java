@@ -53,6 +53,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final float HURT_SCLERA_EXTENSION = 0.5F;
     private static final float LOOK_DOWN_SCLERA_BOTTOM_COVERAGE = 0.22F;
     private static final float BLOCK_FOCUS_EYE_THRESHOLD = 0.25F;
+    private static final float MOUNTED_BACK_LOOK_THRESHOLD = 75.0F;
     private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, 11, 14, 12, 14, 10, 11, 2, 1);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> DAMAGE_REACTIONS = new java.util.HashMap<>();
@@ -94,7 +95,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         PlayerActionAnimationState.Snapshot actionState = PlayerActionAnimationState.snapshot(state.id);
         boolean blinking = !sleeping && animationsEnabled && (isBlinking(state, config) || actionState.landingBlink());
         EyeLook blockFocusEye = animationsEnabled && !blinking ? blockFocusEye(state.id, isSelf) : EyeLook.CENTER;
-        EyeLook eyeLook = animationsEnabled && !blinking ? blockFocusEye != EyeLook.CENTER ? blockFocusEye : idleEyeLook(state) : EyeLook.CENTER;
+        EyeLook mountedEyeLook = animationsEnabled && !blinking ? mountedBackLook(state) : EyeLook.CENTER;
+        EyeLook eyeLook = animationsEnabled && !blinking ? blockFocusEye != EyeLook.CENTER ? blockFocusEye : mountedEyeLook != EyeLook.CENTER ? mountedEyeLook : idleEyeLook(state) : EyeLook.CENTER;
         HumanoidArm spyglassArm = spyglassUseArm(state);
         HumanoidArm bowArm = bowUseArm(state);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(state, bowArm);
@@ -1010,6 +1012,21 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return EyeLook.CENTER;
     }
 
+    private static EyeLook mountedBackLook(AvatarRenderState state) {
+        if (!state.isPassenger) {
+            return EyeLook.CENTER;
+        }
+
+        float yawDelta = wrapDegrees(state.yRot - state.bodyRot);
+        if (yawDelta >= MOUNTED_BACK_LOOK_THRESHOLD) {
+            return EyeLook.LEFT;
+        }
+        if (yawDelta <= -MOUNTED_BACK_LOOK_THRESHOLD) {
+            return EyeLook.RIGHT;
+        }
+        return EyeLook.CENTER;
+    }
+
     private static EyeLook blockFocusEye(int entityId, boolean isSelf) {
         if (isSelf && BlockInteractionEyeFocus.localDirectFocus()) {
             return EyeLook.DOWN;
@@ -1028,6 +1045,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             return EyeLook.RIGHT;
         }
         return EyeLook.CENTER;
+    }
+
+    private static float wrapDegrees(float degrees) {
+        float wrapped = degrees % 360.0F;
+        if (wrapped >= 180.0F) {
+            wrapped -= 360.0F;
+        }
+        if (wrapped < -180.0F) {
+            wrapped += 360.0F;
+        }
+        return wrapped;
     }
 
     private static RenderType renderType(Identifier texture) {

@@ -52,6 +52,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final float SQUINT_VISIBLE_EYE_COVERAGE = 0.5F;
     private static final float HURT_SCLERA_EXTENSION = 0.5F;
     private static final float BLOCK_FOCUS_EYE_THRESHOLD = 0.25F;
+    private static final float MOUNTED_BACK_LOOK_THRESHOLD = 75.0F;
     private static final float FALL_SURPRISE_DISTANCE = 3.0F;
     private static final float VISIBLE_FALL_SURPRISE_DISTANCE = 1.2F;
     private static final double FALL_SURPRISE_SPEED = -0.35D;
@@ -109,7 +110,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         FallEyeReaction fallReaction = animationsEnabled ? fallReaction(player, ageInTicks) : FallEyeReaction.NONE;
         boolean blinking = !sleeping && animationsEnabled && (isBlinking(player, ageInTicks, config) || fallReaction == FallEyeReaction.LANDING_BLINK);
         int blockFocusEye = animationsEnabled && !blinking ? blockFocusEye(player, isSelf) : 0;
-        int mirroredEye = animationsEnabled && !blinking ? blockFocusEye != 0 ? blockFocusEye : mirroredIdleEye(player, ageInTicks) : 0;
+        int mountedBackEye = animationsEnabled && !blinking ? mountedBackEye(player, netHeadYaw) : 0;
+        int mirroredEye = animationsEnabled && !blinking ? blockFocusEye != 0 ? blockFocusEye : mountedBackEye != 0 ? mountedBackEye : mirroredIdleEye(player, ageInTicks) : 0;
         HumanoidArm spyglassArm = spyglassUseArm(player);
         HumanoidArm bowArm = bowUseArm(player);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(player, bowArm);
@@ -1030,6 +1032,21 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         return 0;
     }
 
+    private static int mountedBackEye(AbstractClientPlayer player, float netHeadYaw) {
+        if (!player.isPassenger()) {
+            return 0;
+        }
+
+        float yawDelta = wrapDegrees(netHeadYaw);
+        if (yawDelta >= MOUNTED_BACK_LOOK_THRESHOLD) {
+            return -1;
+        }
+        if (yawDelta <= -MOUNTED_BACK_LOOK_THRESHOLD) {
+            return 1;
+        }
+        return 0;
+    }
+
     private static int blockFocusEye(AbstractClientPlayer player, boolean isSelf) {
         float focus = isSelf ? BlockInteractionEyeFocus.localFocusAmount() : ReactionsNetworking.remoteEyeFocus(player.getId()) / 100.0F;
         if (focus <= -BLOCK_FOCUS_EYE_THRESHOLD) {
@@ -1039,6 +1056,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             return 1;
         }
         return 0;
+    }
+
+    private static float wrapDegrees(float degrees) {
+        float wrapped = degrees % 360.0F;
+        if (wrapped >= 180.0F) {
+            wrapped -= 360.0F;
+        }
+        if (wrapped < -180.0F) {
+            wrapped += 360.0F;
+        }
+        return wrapped;
     }
 
     private static RenderType renderType(ResourceLocation texture) {

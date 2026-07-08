@@ -47,7 +47,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final int IDLE_LOOK_STEP_TICKS = 14;
     private static final int IDLE_LOOK_ANIMATION_TICKS = IDLE_LOOK_STEP_TICKS * 3;
     private static final int IDLE_LOOK_CYCLE_TICKS = IDLE_LOOK_DELAY_TICKS + IDLE_LOOK_ANIMATION_TICKS;
-    private static final int DIRECT_BLOCK_FOCUS_SIGNAL = 101;
+    private static final int DIRECT_BLOCK_FOCUS_DOWN_SIGNAL = 101;
+    private static final int DIRECT_BLOCK_FOCUS_UP_SIGNAL = -101;
     private static final float BOW_FULL_CHARGE_TICKS = 20.0F;
     private static final float SQUINT_VISIBLE_EYE_COVERAGE = 0.5F;
     private static final float HURT_SCLERA_EXTENSION = 0.5F;
@@ -95,7 +96,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         PlayerActionAnimationState.Snapshot actionState = PlayerActionAnimationState.snapshot(state.id);
         boolean blinking = !sleeping && animationsEnabled && (isBlinking(state, config) || actionState.landingBlink());
         EyeLook blockFocusEye = animationsEnabled && !blinking ? blockFocusEye(state.id, isSelf) : EyeLook.CENTER;
-        EyeLook mountedEyeLook = animationsEnabled && !blinking ? mountedBackLook(state) : EyeLook.CENTER;
+        EyeLook mountedEyeLook = animationsEnabled && !blinking ? mountedBackLook(actionState) : EyeLook.CENTER;
         EyeLook eyeLook = animationsEnabled && !blinking ? blockFocusEye != EyeLook.CENTER ? blockFocusEye : mountedEyeLook != EyeLook.CENTER ? mountedEyeLook : idleEyeLook(state) : EyeLook.CENTER;
         HumanoidArm spyglassArm = spyglassUseArm(state);
         HumanoidArm bowArm = bowUseArm(state);
@@ -247,6 +248,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         LEFT,
         CENTER,
         RIGHT,
+        UP,
         DOWN
     }
 
@@ -697,9 +699,14 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         int pupilColumn = pupilDestinationColumn(side, eyeLook);
         int pupilSourceColumn = internalPupilColumn(side);
         float rowHeight = dstY2 - dstY1;
-        if (eyeLook == EyeLook.DOWN) {
-            float scleraBottom = rowHeight * LOOK_DOWN_SCLERA_BOTTOM_COVERAGE;
-            submitEyePiece(poseStack, collector, renderType, light, overlay, skinX + pupilSourceColumn, sourceY, 1.0F, sourceHeight, dstX1 + pupilColumn, dstY1, dstX1 + pupilColumn + 1.0F, dstY2 - scleraBottom, NORMAL_COLOR);
+        if (eyeLook == EyeLook.UP || eyeLook == EyeLook.DOWN) {
+            float verticalSclera = rowHeight * LOOK_DOWN_SCLERA_BOTTOM_COVERAGE;
+            float visibleRowHeight = rowHeight - verticalSclera;
+            float visibleSourceHeight = sourceHeight * visibleRowHeight / rowHeight;
+            float pupilSourceY = eyeLook == EyeLook.UP ? sourceY + sourceHeight - visibleSourceHeight : sourceY;
+            float pupilDstY1 = eyeLook == EyeLook.DOWN ? dstY1 + verticalSclera : dstY1;
+            float pupilDstY2 = pupilDstY1 + visibleRowHeight;
+            submitEyePiece(poseStack, collector, renderType, light, overlay, skinX + pupilSourceColumn, pupilSourceY, 1.0F, visibleSourceHeight, dstX1 + pupilColumn, pupilDstY1, dstX1 + pupilColumn + 1.0F, pupilDstY2, NORMAL_COLOR);
             return;
         }
 
@@ -1012,32 +1019,27 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return EyeLook.CENTER;
     }
 
-    private static EyeLook mountedBackLook(AvatarRenderState state) {
-        if (!state.isPassenger) {
-            return EyeLook.CENTER;
-        }
-
-        float yawDelta = wrapDegrees(state.yRot - state.bodyRot);
-        if (yawDelta >= MOUNTED_BACK_LOOK_THRESHOLD) {
-            return EyeLook.LEFT;
-        }
+    private static EyeLook mountedBackLook(PlayerActionAnimationState.Snapshot actionState) {
+        float yawDelta = actionState.mountedYawDelta();
         if (yawDelta <= -MOUNTED_BACK_LOOK_THRESHOLD) {
             return EyeLook.RIGHT;
+        }
+        if (yawDelta >= MOUNTED_BACK_LOOK_THRESHOLD) {
+            return EyeLook.LEFT;
         }
         return EyeLook.CENTER;
     }
 
     private static EyeLook blockFocusEye(int entityId, boolean isSelf) {
-        if (isSelf && BlockInteractionEyeFocus.localDirectFocus()) {
+        int directFocus = isSelf ? BlockInteractionEyeFocus.localDirectFocusSignal() : ReactionsNetworking.remoteEyeFocus(entityId);
+        if (directFocus == DIRECT_BLOCK_FOCUS_DOWN_SIGNAL) {
             return EyeLook.DOWN;
         }
-
-        int remoteFocus = isSelf ? 0 : ReactionsNetworking.remoteEyeFocus(entityId);
-        if (!isSelf && remoteFocus == DIRECT_BLOCK_FOCUS_SIGNAL) {
-            return EyeLook.DOWN;
+        if (directFocus == DIRECT_BLOCK_FOCUS_UP_SIGNAL) {
+            return EyeLook.UP;
         }
 
-        float focus = isSelf ? BlockInteractionEyeFocus.localFocusAmount() : remoteFocus / 100.0F;
+        float focus = isSelf ? BlockInteractionEyeFocus.localFocusAmount() : directFocus / 100.0F;
         if (focus <= -BLOCK_FOCUS_EYE_THRESHOLD) {
             return EyeLook.LEFT;
         }
@@ -1045,17 +1047,6 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             return EyeLook.RIGHT;
         }
         return EyeLook.CENTER;
-    }
-
-    private static float wrapDegrees(float degrees) {
-        float wrapped = degrees % 360.0F;
-        if (wrapped >= 180.0F) {
-            wrapped -= 360.0F;
-        }
-        if (wrapped < -180.0F) {
-            wrapped += 360.0F;
-        }
-        return wrapped;
     }
 
     private static RenderType renderType(Identifier texture) {

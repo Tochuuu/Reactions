@@ -18,8 +18,10 @@ public final class BlockInteractionEyeFocus {
     private static final float READING_FOCUS_STEP = 0.08F;
     private static final float FOCUS_RELEASE_STEP = 0.18F;
     private static final float READING_FOCUS_AMOUNT = 0.38F;
-    private static final int DIRECT_BLOCK_FOCUS_SIGNAL = 101;
+    private static final int DIRECT_BLOCK_FOCUS_DOWN_SIGNAL = 101;
+    private static final int DIRECT_BLOCK_FOCUS_UP_SIGNAL = -101;
     private static final float DIRECT_BLOCK_FOCUS_AMOUNT = 0.0F;
+    private static final double DIRECT_BLOCK_FOCUS_UP_Y_OFFSET = 0.25D;
     private static final int READING_FOCUS_CYCLE_TICKS = 52;
     private static BlockPos lastLookedBlock;
     private static BlockPos activeBlock;
@@ -27,7 +29,7 @@ public final class BlockInteractionEyeFocus {
     private static int ticks;
     private static int lastSentFocus = Integer.MIN_VALUE;
     private static float localFocusAmount;
-    private static boolean localDirectFocus;
+    private static int localDirectFocusSignal;
     private static boolean hadBlockInteractionScreen;
 
     private BlockInteractionEyeFocus() {
@@ -45,14 +47,14 @@ public final class BlockInteractionEyeFocus {
         if (isReadingScreen(client.gui.screen())) {
             activeBlock = null;
             hadBlockInteractionScreen = false;
-            updateFocus(readingFocus(), false, READING_FOCUS_STEP);
+            updateFocus(readingFocus(), 0, READING_FOCUS_STEP);
             return;
         }
 
         if (!isBlockInteractionScreen(client.gui.screen())) {
             activeBlock = null;
             hadBlockInteractionScreen = false;
-            updateFocus(0.0F, false, FOCUS_RELEASE_STEP);
+            updateFocus(0.0F, 0, FOCUS_RELEASE_STEP);
             return;
         }
 
@@ -62,7 +64,7 @@ public final class BlockInteractionEyeFocus {
         }
 
         FocusTarget focusTarget = activeBlock == null ? FocusTarget.NONE : calculateFocus(player, activeBlock);
-        updateFocus(focusTarget.amount(), focusTarget.direct(), BLOCK_FOCUS_STEP);
+        updateFocus(focusTarget.amount(), focusTarget.directSignal(), BLOCK_FOCUS_STEP);
     }
 
     public static float localFocusAmount() {
@@ -70,7 +72,11 @@ public final class BlockInteractionEyeFocus {
     }
 
     public static boolean localDirectFocus() {
-        return localDirectFocus;
+        return localDirectFocusSignal != 0;
+    }
+
+    public static int localDirectFocusSignal() {
+        return localDirectFocusSignal;
     }
 
     private static void rememberLookedBlock(Minecraft client) {
@@ -130,19 +136,23 @@ public final class BlockInteractionEyeFocus {
         double targetZ = toBlock.z / targetLength;
         double lookX = look.x / lookLength;
         double lookZ = look.z / lookLength;
-        double side = lookZ * targetX - lookX * targetZ;
+        double side = lookX * targetZ - lookZ * targetX;
         double forward = lookX * targetX + lookZ * targetZ;
         float focus = (float) clamp(Math.atan2(side, forward) / MAX_FOCUS_ANGLE, -1.0D, 1.0D);
         if (Math.abs(focus) < FOCUS_DEAD_ZONE) {
-            return forward > 0.0D ? FocusTarget.DIRECT : FocusTarget.NONE;
+            return forward > 0.0D ? FocusTarget.direct(directFocusSignal(toBlock)) : FocusTarget.NONE;
         }
-        return new FocusTarget(focus, false);
+        return new FocusTarget(focus, 0);
     }
 
-    private static void updateFocus(float focus, boolean directFocus, float step) {
-        localDirectFocus = directFocus;
+    private static int directFocusSignal(Vec3 toBlock) {
+        return toBlock.y > DIRECT_BLOCK_FOCUS_UP_Y_OFFSET ? DIRECT_BLOCK_FOCUS_UP_SIGNAL : DIRECT_BLOCK_FOCUS_DOWN_SIGNAL;
+    }
+
+    private static void updateFocus(float focus, int directFocusSignal, float step) {
+        localDirectFocusSignal = directFocusSignal;
         localFocusAmount = approach(localFocusAmount, focus, step);
-        int quantizedFocus = directFocus ? DIRECT_BLOCK_FOCUS_SIGNAL : Math.round(localFocusAmount * 100.0F);
+        int quantizedFocus = directFocusSignal != 0 ? directFocusSignal : Math.round(localFocusAmount * 100.0F);
         if (quantizedFocus != lastSentFocus) {
             lastSentFocus = quantizedFocus;
             ReactionsNetworking.sendLocalEyeFocus(quantizedFocus);
@@ -154,12 +164,12 @@ public final class BlockInteractionEyeFocus {
         activeBlock = null;
         lastLookedBlockTick = 0;
         hadBlockInteractionScreen = false;
-        localDirectFocus = false;
+        localDirectFocusSignal = 0;
         setFocus(0.0F);
     }
 
     private static void setFocus(float focus) {
-        localDirectFocus = false;
+        localDirectFocusSignal = 0;
         localFocusAmount = focus;
         int quantizedFocus = Math.round(focus * 100.0F);
         if (quantizedFocus != lastSentFocus) {
@@ -182,8 +192,11 @@ public final class BlockInteractionEyeFocus {
         return Math.max(min, Math.min(max, value));
     }
 
-    private record FocusTarget(float amount, boolean direct) {
-        private static final FocusTarget NONE = new FocusTarget(0.0F, false);
-        private static final FocusTarget DIRECT = new FocusTarget(DIRECT_BLOCK_FOCUS_AMOUNT, true);
+    private record FocusTarget(float amount, int directSignal) {
+        private static final FocusTarget NONE = new FocusTarget(0.0F, 0);
+
+        private static FocusTarget direct(int signal) {
+            return new FocusTarget(DIRECT_BLOCK_FOCUS_AMOUNT, signal);
+        }
     }
 }

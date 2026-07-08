@@ -235,7 +235,12 @@ public final class ReactionsNetworking {
             return false;
         }
 
-        platform.sendToServer(new EyeConfigC2SPayload(localConfig(minecraft.player.getUUID(), minecraft.player.getId())));
+        Integer entityId = assignedEntityId(minecraft.player);
+        if (entityId == null) {
+            return false;
+        }
+
+        platform.sendToServer(new EyeConfigC2SPayload(localConfig(minecraft.player.getUUID(), entityId)));
         return true;
     }
 
@@ -256,7 +261,12 @@ public final class ReactionsNetworking {
             return;
         }
 
-        RemoteEyeConfig hostConfig = localConfig(host.getUUID(), host.getId());
+        Integer hostEntityId = assignedEntityId(host);
+        if (hostEntityId == null) {
+            return;
+        }
+
+        RemoteEyeConfig hostConfig = localConfig(host.getUUID(), hostEntityId);
         if (hostConfig.equals(SERVER_CONFIGS.get(host.getUUID()))) {
             return;
         }
@@ -282,6 +292,11 @@ public final class ReactionsNetworking {
             return;
         }
 
+        Integer hostEntityId = assignedEntityId(host);
+        if (hostEntityId == null) {
+            return;
+        }
+
         EyeFocusState current = SERVER_EYE_FOCUSES.get(host.getUUID());
         if (focus == 0) {
             if (current == null) {
@@ -289,10 +304,10 @@ public final class ReactionsNetworking {
             }
             SERVER_EYE_FOCUSES.remove(host.getUUID());
         } else {
-            if (current != null && current.focus() == focus && current.entityId() == host.getId()) {
+            if (current != null && current.focus() == focus && current.entityId() == hostEntityId) {
                 return;
             }
-            SERVER_EYE_FOCUSES.put(host.getUUID(), new EyeFocusState(host.getUUID(), host.getId(), focus));
+            SERVER_EYE_FOCUSES.put(host.getUUID(), new EyeFocusState(host.getUUID(), hostEntityId, focus));
         }
         sendEyeFocusToReceivers(host, focus);
     }
@@ -368,9 +383,14 @@ public final class ReactionsNetworking {
     }
 
     private static void sendEyeFocusToReceivers(ServerPlayer source, int focus) {
+        Integer sourceEntityId = assignedEntityId(source);
+        if (sourceEntityId == null) {
+            return;
+        }
+
         for (ServerPlayer player : source.level().getServer().getPlayerList().getPlayers()) {
             if (canSendEyeFocusToPlayer(player)) {
-                if (!trySendEyeFocus(player, source.getUUID(), source.getId(), focus)) {
+                if (!trySendEyeFocus(player, source.getUUID(), sourceEntityId, focus)) {
                     queueServerSync(player);
                 }
             } else {
@@ -522,6 +542,14 @@ public final class ReactionsNetworking {
             config.eyeWidth,
             config.eyeHeight
         );
+    }
+
+    private static Integer assignedEntityId(Player player) {
+        try {
+            return player.getId();
+        } catch (IllegalStateException ignored) {
+            return null;
+        }
     }
 
     private static RemoteEyeConfig withPlayerIdentity(RemoteEyeConfig config, UUID playerId, int entityId) {

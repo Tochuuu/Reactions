@@ -93,7 +93,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         Minecraft minecraft = Minecraft.getInstance();
         boolean isSelf = minecraft.player != null && minecraft.player.getId() == player.getId();
         RemoteEyeConfig remoteConfig = isSelf ? null : ReactionsNetworking.remoteConfig(player.getId());
-        ResourceLocation texture = player.getSkin().texture();
+        ResourceLocation texture = player.getSkinTextureLocation();
         boolean canSyncWithServer = ReactionsNetworking.canSyncWithServer();
         ReactionsClientConfig.PlayerOverride playerOverride = !isSelf && remoteConfig == null && !canSyncWithServer
             ? config.playerOverride(playerName(player))
@@ -587,12 +587,13 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     }
 
     private static void vertex(VertexConsumer consumer, PoseStack.Pose pose, float x, float y, float u, float v, int light, int overlay, int color) {
-        consumer.addVertex(pose, x / 16.0F, y / 16.0F, HEAD_FACE_Z)
-            .setColor(color)
-            .setUv(u, v)
-            .setOverlay(overlay)
-            .setLight(light)
-            .setNormal(pose, 0.0F, 0.0F, -1.0F);
+        consumer.vertex(pose.pose(), x / 16.0F, y / 16.0F, HEAD_FACE_Z)
+            .color(red(color), green(color), blue(color), alpha(color))
+            .uv(u, v)
+            .overlayCoords(overlay)
+            .uv2(light)
+            .normal(pose.normal(), 0.0F, 0.0F, -1.0F)
+            .endVertex();
     }
 
     private static void submitMouth(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, EyeSettings eyes) {
@@ -675,21 +676,23 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     }
 
     private static void mouthVertex(VertexConsumer consumer, PoseStack.Pose pose, float x, float y, float u, float v, int light, int overlay, int color) {
-        consumer.addVertex(pose, x / 16.0F, y / 16.0F, MOUTH_FACE_Z)
-            .setColor(color)
-            .setUv(u, v)
-            .setOverlay(overlay)
-            .setLight(light)
-            .setNormal(pose, 0.0F, 0.0F, -1.0F);
+        consumer.vertex(pose.pose(), x / 16.0F, y / 16.0F, MOUTH_FACE_Z)
+            .color(red(color), green(color), blue(color), alpha(color))
+            .uv(u, v)
+            .overlayCoords(overlay)
+            .uv2(light)
+            .normal(pose.normal(), 0.0F, 0.0F, -1.0F)
+            .endVertex();
     }
 
     private static void mouthCoverVertex(VertexConsumer consumer, PoseStack.Pose pose, float x, float y, float u, float v, int light, int overlay, int color) {
-        consumer.addVertex(pose, x / 16.0F, y / 16.0F, MOUTH_COVER_FACE_Z)
-            .setColor(color)
-            .setUv(u, v)
-            .setOverlay(overlay)
-            .setLight(light)
-            .setNormal(pose, 0.0F, 0.0F, -1.0F);
+        consumer.vertex(pose.pose(), x / 16.0F, y / 16.0F, MOUTH_COVER_FACE_Z)
+            .color(red(color), green(color), blue(color), alpha(color))
+            .uv(u, v)
+            .overlayCoords(overlay)
+            .uv2(light)
+            .normal(pose.normal(), 0.0F, 0.0F, -1.0F)
+            .endVertex();
     }
 
     private static boolean canUseBlockEyeAnimation(int eyeWidth, int eyeHeight) {
@@ -811,6 +814,22 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         int green = clamp(Math.round(((color >>> 8) & 0xFF) * factor), 0, 255);
         int blue = clamp(Math.round((color & 0xFF) * factor), 0, 255);
         return alpha | red << 16 | green << 8 | blue;
+    }
+
+    private static int alpha(int color) {
+        return color >>> 24 & 0xFF;
+    }
+
+    private static int red(int color) {
+        return color >>> 16 & 0xFF;
+    }
+
+    private static int green(int color) {
+        return color >>> 8 & 0xFF;
+    }
+
+    private static int blue(int color) {
+        return color & 0xFF;
     }
 
     private static int internalPupilColumn(EyeSide side) {

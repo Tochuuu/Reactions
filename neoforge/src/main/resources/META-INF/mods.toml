@@ -1,5 +1,5 @@
 modLoader = "javafml"
-loaderVersion = "[2,)"
+loaderVersion = "[47,)"
 #issueTrackerURL = ""
 license = "GNU GPL 3.0"
 
@@ -13,16 +13,16 @@ description = '''A mod that adds dynamic expressions and facial personality to p
 displayTest = "IGNORE_ALL_VERSION"
 
 [[dependencies.reactions]]
-modId = "neoforge"
-type = "required"
-versionRange = "[21,)"
+modId = "forge"
+mandatory = true
+versionRange = "[47,)"
 ordering = "NONE"
 side = "CLIENT"
 
 [[dependencies.reactions]]
 modId = "minecraft"
-type = "required"
-versionRange = "[1.21,1.21.4)"
+mandatory = true
+versionRange = "[1.20.1,1.20.2)"
 ordering = "NONE"
 side = "CLIENT"
 

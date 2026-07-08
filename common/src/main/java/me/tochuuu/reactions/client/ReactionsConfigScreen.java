@@ -5,13 +5,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.resources.PlayerSkin;
+import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
-
-import java.util.function.Supplier;
 
 public final class ReactionsConfigScreen extends Screen {
     private static final int FACE_U = 8;
@@ -47,7 +45,7 @@ public final class ReactionsConfigScreen extends Screen {
     private boolean compactLayout;
     private boolean denseLayout;
     private GameProfile menuSkinProfile;
-    private Supplier<PlayerSkin> menuSkinLookup;
+    private ResourceLocation menuSkinTexture;
 
     public ReactionsConfigScreen(Screen parent) {
         super(Component.translatable("screen.reactions.config"));
@@ -379,32 +377,29 @@ public final class ReactionsConfigScreen extends Screen {
 
     private ResourceLocation skinTexture() {
         if (this.minecraft != null && this.minecraft.player != null) {
-            return this.minecraft.player.getSkin().texture();
+            return this.minecraft.player.getSkinTextureLocation();
         }
-        Supplier<PlayerSkin> lookup = menuSkinLookup();
-        if (lookup != null) {
-            PlayerSkin skin = lookup.get();
-            if (skin != null && skin.texture() != null) {
-                return skin.texture();
-            }
+        ResourceLocation texture = menuSkinTexture();
+        if (texture != null) {
+            return texture;
         }
         return MinecraftFallbacks.DEFAULT_SKIN;
     }
 
-    private Supplier<PlayerSkin> menuSkinLookup() {
+    private ResourceLocation menuSkinTexture() {
         if (this.minecraft == null) {
             return null;
         }
         Minecraft minecraft = this.minecraft;
-        GameProfile profile = minecraft.getGameProfile();
+        GameProfile profile = minecraft.getUser().getGameProfile();
         if (profile == null) {
             return null;
         }
-        if (menuSkinLookup == null || menuSkinProfile != profile) {
+        if (menuSkinTexture == null || menuSkinProfile != profile) {
             menuSkinProfile = profile;
-            menuSkinLookup = minecraft.getSkinManager().lookupInsecure(profile);
+            menuSkinTexture = minecraft.getSkinManager().getInsecureSkinLocation(profile);
         }
-        return menuSkinLookup;
+        return menuSkinTexture;
     }
 
     private boolean isInsideFace(double mouseX, double mouseY) {
@@ -488,6 +483,6 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     private static final class MinecraftFallbacks {
-        private static final ResourceLocation DEFAULT_SKIN = ResourceLocation.withDefaultNamespace("textures/entity/player/wide/steve.png");
+        private static final ResourceLocation DEFAULT_SKIN = DefaultPlayerSkin.getDefaultSkin();
     }
 }

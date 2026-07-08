@@ -1,12 +1,15 @@
 package me.tochuuu.reactions.fabric;
 
 import me.tochuuu.reactions.network.ReactionsNetworking;
+import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket;
 import net.minecraft.server.level.ServerPlayer;
+
+import java.util.function.Consumer;
 
 public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
     protected static final ReactionsFabricNetworking INSTANCE = new ReactionsFabricNetworking();
@@ -22,13 +25,14 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
         initialized = true;
         ReactionsNetworking.setPlatform(INSTANCE);
 
-        PayloadTypeRegistry.playC2S().register(ReactionsNetworking.EyeConfigC2SPayload.TYPE, ReactionsNetworking.EyeConfigC2SPayload.STREAM_CODEC);
-        PayloadTypeRegistry.playS2C().register(ReactionsNetworking.EyeConfigS2CPayload.TYPE, ReactionsNetworking.EyeConfigS2CPayload.STREAM_CODEC);
-        PayloadTypeRegistry.playC2S().register(ReactionsNetworking.EyeFocusC2SPayload.TYPE, ReactionsNetworking.EyeFocusC2SPayload.STREAM_CODEC);
-        PayloadTypeRegistry.playS2C().register(ReactionsNetworking.EyeFocusS2CPayload.TYPE, ReactionsNetworking.EyeFocusS2CPayload.STREAM_CODEC);
-
-        ServerPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeConfigC2SPayload.TYPE, (payload, context) -> ReactionsNetworking.handleServerboundConfig(payload, context.player()));
-        ServerPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeFocusC2SPayload.TYPE, (payload, context) -> ReactionsNetworking.handleServerboundEyeFocus(payload, context.player()));
+        ServerPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EYE_CONFIG_C2S, (server, player, handler, buf, responseSender) -> {
+            ReactionsNetworking.EyeConfigC2SPayload payload = ReactionsNetworking.EyeConfigC2SPayload.read(buf);
+            server.execute(() -> ReactionsNetworking.handleServerboundConfig(payload, player));
+        });
+        ServerPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EYE_FOCUS_C2S, (server, player, handler, buf, responseSender) -> {
+            ReactionsNetworking.EyeFocusC2SPayload payload = ReactionsNetworking.EyeFocusC2SPayload.read(buf);
+            server.execute(() -> ReactionsNetworking.handleServerboundEyeFocus(payload, player));
+        });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> ReactionsNetworking.onServerPlayerJoin(handler.player));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> ReactionsNetworking.onServerPlayerQuit(handler.player));
         ServerTickEvents.END_SERVER_TICK.register(ReactionsNetworking::onServerTick);
@@ -41,7 +45,7 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
 
     @Override
     public boolean canSendToPlayer(ServerPlayer player) {
-        return ServerPlayNetworking.canSend(player, ReactionsNetworking.EyeConfigS2CPayload.TYPE)
+        return ServerPlayNetworking.canSend(player, ReactionsNetworking.EYE_CONFIG_S2C)
             || ReactionsNetworking.hasServerConfig(player.getUUID());
     }
 
@@ -52,7 +56,7 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
 
     @Override
     public boolean canSendEyeFocusToPlayer(ServerPlayer player) {
-        return ServerPlayNetworking.canSend(player, ReactionsNetworking.EyeFocusS2CPayload.TYPE);
+        return ServerPlayNetworking.canSend(player, ReactionsNetworking.EYE_FOCUS_S2C);
     }
 
     @Override
@@ -62,12 +66,12 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
 
     @Override
     public void sendToPlayer(ServerPlayer player, ReactionsNetworking.EyeConfigS2CPayload payload) {
-        if (ServerPlayNetworking.canSend(player, ReactionsNetworking.EyeConfigS2CPayload.TYPE)) {
-            ServerPlayNetworking.send(player, payload);
+        if (ServerPlayNetworking.canSend(player, ReactionsNetworking.EYE_CONFIG_S2C)) {
+            ServerPlayNetworking.send(player, ReactionsNetworking.EYE_CONFIG_S2C, buffer(payload::write));
             return;
         }
 
-        player.connection.send(new ClientboundCustomPayloadPacket(payload));
+        player.connection.send(new ClientboundCustomPayloadPacket(ReactionsNetworking.EYE_CONFIG_S2C, buffer(payload::write)));
     }
 
     @Override
@@ -77,6 +81,12 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
 
     @Override
     public void sendEyeFocusToPlayer(ServerPlayer player, ReactionsNetworking.EyeFocusS2CPayload payload) {
-        ServerPlayNetworking.send(player, payload);
+        ServerPlayNetworking.send(player, ReactionsNetworking.EYE_FOCUS_S2C, buffer(payload::write));
+    }
+
+    protected static FriendlyByteBuf buffer(Consumer<FriendlyByteBuf> writer) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        writer.accept(buf);
+        return buf;
     }
 }

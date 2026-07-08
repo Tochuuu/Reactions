@@ -23,8 +23,14 @@ public final class ReactionsFabricClientNetworking extends ReactionsFabricNetwor
         ReactionsNetworking.setPlatform(INSTANCE);
 
         KeyBindingHelper.registerKeyBinding(ReactionsClient.openConfigKey());
-        ClientPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeConfigS2CPayload.TYPE, (payload, context) -> ReactionsNetworking.handleClientboundConfig(payload));
-        ClientPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeFocusS2CPayload.TYPE, (payload, context) -> ReactionsNetworking.handleClientboundEyeFocus(payload));
+        ClientPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EYE_CONFIG_S2C, (client, handler, buf, responseSender) -> {
+            ReactionsNetworking.EyeConfigS2CPayload payload = ReactionsNetworking.EyeConfigS2CPayload.read(buf);
+            client.execute(() -> ReactionsNetworking.handleClientboundConfig(payload));
+        });
+        ClientPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EYE_FOCUS_S2C, (client, handler, buf, responseSender) -> {
+            ReactionsNetworking.EyeFocusS2CPayload payload = ReactionsNetworking.EyeFocusS2CPayload.read(buf);
+            client.execute(() -> ReactionsNetworking.handleClientboundEyeFocus(payload));
+        });
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ReactionsNetworking.onClientJoin());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ReactionsNetworking.onClientQuit());
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -35,21 +41,21 @@ public final class ReactionsFabricClientNetworking extends ReactionsFabricNetwor
 
     @Override
     public boolean canSendToServer() {
-        return ClientPlayNetworking.canSend(ReactionsNetworking.EyeConfigC2SPayload.TYPE);
+        return ClientPlayNetworking.canSend(ReactionsNetworking.EYE_CONFIG_C2S);
     }
 
     @Override
     public boolean canSendEyeFocusToServer() {
-        return ClientPlayNetworking.canSend(ReactionsNetworking.EyeFocusC2SPayload.TYPE);
+        return ClientPlayNetworking.canSend(ReactionsNetworking.EYE_FOCUS_C2S);
     }
 
     @Override
     public void sendToServer(ReactionsNetworking.EyeConfigC2SPayload payload) {
-        ClientPlayNetworking.send(payload);
+        ClientPlayNetworking.send(ReactionsNetworking.EYE_CONFIG_C2S, buffer(payload::write));
     }
 
     @Override
     public void sendEyeFocusToServer(ReactionsNetworking.EyeFocusC2SPayload payload) {
-        ClientPlayNetworking.send(payload);
+        ClientPlayNetworking.send(ReactionsNetworking.EYE_FOCUS_C2S, buffer(payload::write));
     }
 }

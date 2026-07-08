@@ -1,23 +1,38 @@
 package me.tochuuu.reactions.neoforge;
 
+import me.tochuuu.reactions.Reactions;
 import me.tochuuu.reactions.client.ReactionsClient;
 import me.tochuuu.reactions.network.ReactionsNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.network.Connection;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.common.extensions.ICommonPacketListener;
-import net.neoforged.neoforge.event.entity.player.PlayerEvent;
-import net.neoforged.neoforge.event.tick.ServerTickEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
-import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
+import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.network.NetworkDirection;
+import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.PacketDistributor;
+import net.minecraftforge.network.simple.SimpleChannel;
+
+import java.util.Optional;
+import java.util.function.Supplier;
 
 public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Platform {
     private static final ReactionsNeoForgeNetworking INSTANCE = new ReactionsNeoForgeNetworking();
+    private static final String PROTOCOL_VERSION = "1";
+    private static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
+        new ResourceLocation(Reactions.MOD_ID, "main"),
+        () -> PROTOCOL_VERSION,
+        NetworkRegistry.acceptMissingOr(PROTOCOL_VERSION),
+        NetworkRegistry.acceptMissingOr(PROTOCOL_VERSION)
+    );
+    private static int nextPacketId;
     private static boolean initialized;
     private static boolean clientInitialized;
 
@@ -30,11 +45,11 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
         }
         initialized = true;
         ReactionsNetworking.setPlatform(INSTANCE);
+        registerMessages();
 
-        modEventBus.addListener(ReactionsNeoForgeNetworking::registerPayloads);
-        NeoForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onPlayerJoin);
-        NeoForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onPlayerQuit);
-        NeoForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onServerTick);
+        MinecraftForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onPlayerJoin);
+        MinecraftForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onPlayerQuit);
+        MinecraftForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onServerTick);
     }
 
     public static void initClient(IEventBus modEventBus) {
@@ -44,29 +59,50 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
         clientInitialized = true;
 
         modEventBus.addListener(ReactionsNeoForgeNetworking::registerKeyMappings);
-        NeoForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onClientJoin);
-        NeoForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onClientQuit);
-        NeoForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onClientTick);
+        MinecraftForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onClientJoin);
+        MinecraftForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onClientQuit);
+        MinecraftForge.EVENT_BUS.addListener(ReactionsNeoForgeNetworking::onClientTick);
     }
 
-    private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        event.registrar("1").optional()
-            .playToServer(ReactionsNetworking.EyeConfigC2SPayload.TYPE, ReactionsNetworking.EyeConfigC2SPayload.STREAM_CODEC, (payload, context) -> {
-                if (context.player() instanceof ServerPlayer serverPlayer) {
-                    ReactionsNetworking.handleServerboundConfig(payload, serverPlayer);
-                }
-            })
-            .playToServer(ReactionsNetworking.EyeFocusC2SPayload.TYPE, ReactionsNetworking.EyeFocusC2SPayload.STREAM_CODEC, (payload, context) -> {
-                if (context.player() instanceof ServerPlayer serverPlayer) {
-                    ReactionsNetworking.handleServerboundEyeFocus(payload, serverPlayer);
-                }
-            })
-            .playToClient(ReactionsNetworking.EyeConfigS2CPayload.TYPE, ReactionsNetworking.EyeConfigS2CPayload.STREAM_CODEC, (payload, context) -> {
-                ReactionsNetworking.handleClientboundConfig(payload);
-            })
-            .playToClient(ReactionsNetworking.EyeFocusS2CPayload.TYPE, ReactionsNetworking.EyeFocusS2CPayload.STREAM_CODEC, (payload, context) -> {
-                ReactionsNetworking.handleClientboundEyeFocus(payload);
-            });
+    private static void registerMessages() {
+        CHANNEL.registerMessage(nextPacketId++, ReactionsNetworking.EyeConfigC2SPayload.class, ReactionsNetworking.EyeConfigC2SPayload::write, ReactionsNetworking.EyeConfigC2SPayload::read, ReactionsNeoForgeNetworking::handleConfigToServer, Optional.of(NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(nextPacketId++, ReactionsNetworking.EyeConfigS2CPayload.class, ReactionsNetworking.EyeConfigS2CPayload::write, ReactionsNetworking.EyeConfigS2CPayload::read, ReactionsNeoForgeNetworking::handleConfigToClient, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(nextPacketId++, ReactionsNetworking.EyeFocusC2SPayload.class, ReactionsNetworking.EyeFocusC2SPayload::write, ReactionsNetworking.EyeFocusC2SPayload::read, ReactionsNeoForgeNetworking::handleFocusToServer, Optional.of(NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(nextPacketId++, ReactionsNetworking.EyeFocusS2CPayload.class, ReactionsNetworking.EyeFocusS2CPayload::write, ReactionsNetworking.EyeFocusS2CPayload::read, ReactionsNeoForgeNetworking::handleFocusToClient, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+    }
+
+    private static void handleConfigToServer(ReactionsNetworking.EyeConfigC2SPayload payload, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
+        context.enqueueWork(() -> {
+            ServerPlayer player = context.getSender();
+            if (player != null) {
+                ReactionsNetworking.handleServerboundConfig(payload, player);
+            }
+        });
+        context.setPacketHandled(true);
+    }
+
+    private static void handleFocusToServer(ReactionsNetworking.EyeFocusC2SPayload payload, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
+        context.enqueueWork(() -> {
+            ServerPlayer player = context.getSender();
+            if (player != null) {
+                ReactionsNetworking.handleServerboundEyeFocus(payload, player);
+            }
+        });
+        context.setPacketHandled(true);
+    }
+
+    private static void handleConfigToClient(ReactionsNetworking.EyeConfigS2CPayload payload, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
+        context.enqueueWork(() -> ReactionsNetworking.handleClientboundConfig(payload));
+        context.setPacketHandled(true);
+    }
+
+    private static void handleFocusToClient(ReactionsNetworking.EyeFocusS2CPayload payload, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
+        context.enqueueWork(() -> ReactionsNetworking.handleClientboundEyeFocus(payload));
+        context.setPacketHandled(true);
     }
 
     private static void registerKeyMappings(RegisterKeyMappingsEvent event) {
@@ -85,13 +121,17 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
         }
     }
 
-    private static void onServerTick(ServerTickEvent.Post event) {
-        ReactionsNetworking.onServerTick(event.getServer());
+    private static void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) {
+            ReactionsNetworking.onServerTick(event.getServer());
+        }
     }
 
-    private static void onClientTick(ClientTickEvent.Post event) {
-        ReactionsClient.onClientTick(Minecraft.getInstance());
-        ReactionsNetworking.onClientTick();
+    private static void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) {
+            ReactionsClient.onClientTick(Minecraft.getInstance());
+            ReactionsNetworking.onClientTick();
+        }
     }
 
     private static void onClientJoin(ClientPlayerNetworkEvent.LoggingIn event) {
@@ -105,53 +145,45 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
     @Override
     public boolean canSendToServer() {
         ClientPacketListener connection = Minecraft.getInstance().getConnection();
-        return connection instanceof ICommonPacketListener listener && canUseChannel(listener, ReactionsNetworking.EyeConfigC2SPayload.TYPE);
+        return connection != null && canUseChannel(connection.getConnection());
     }
 
     @Override
     public boolean canSendToPlayer(ServerPlayer player) {
-        return player.connection instanceof ICommonPacketListener listener && canUseChannel(listener, ReactionsNetworking.EyeConfigS2CPayload.TYPE);
+        return canUseChannel(player.connection.connection);
     }
 
     @Override
     public boolean canSendEyeFocusToServer() {
-        ClientPacketListener connection = Minecraft.getInstance().getConnection();
-        return connection instanceof ICommonPacketListener listener && canUseChannel(listener, ReactionsNetworking.EyeFocusC2SPayload.TYPE);
+        return canSendToServer();
     }
 
     @Override
     public boolean canSendEyeFocusToPlayer(ServerPlayer player) {
-        return player.connection instanceof ICommonPacketListener listener && canUseChannel(listener, ReactionsNetworking.EyeFocusS2CPayload.TYPE);
+        return canSendToPlayer(player);
     }
 
-    private static boolean canUseChannel(ICommonPacketListener listener, net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<?> type) {
-        if (listener.hasChannel(type)) {
-            return true;
-        }
-        try {
-            return listener.getConnectionType().isOther();
-        } catch (RuntimeException ignored) {
-            return false;
-        }
+    private static boolean canUseChannel(Connection connection) {
+        return connection != null && CHANNEL.isRemotePresent(connection);
     }
 
     @Override
     public void sendToServer(ReactionsNetworking.EyeConfigC2SPayload payload) {
-        PacketDistributor.sendToServer(payload);
+        CHANNEL.sendToServer(payload);
     }
 
     @Override
     public void sendToPlayer(ServerPlayer player, ReactionsNetworking.EyeConfigS2CPayload payload) {
-        PacketDistributor.sendToPlayer(player, payload);
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), payload);
     }
 
     @Override
     public void sendEyeFocusToServer(ReactionsNetworking.EyeFocusC2SPayload payload) {
-        PacketDistributor.sendToServer(payload);
+        CHANNEL.sendToServer(payload);
     }
 
     @Override
     public void sendEyeFocusToPlayer(ServerPlayer player, ReactionsNetworking.EyeFocusS2CPayload payload) {
-        PacketDistributor.sendToPlayer(player, payload);
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), payload);
     }
 }

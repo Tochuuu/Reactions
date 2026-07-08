@@ -4,9 +4,7 @@ import me.tochuuu.reactions.Reactions;
 import me.tochuuu.reactions.client.ReactionsClientConfig;
 import me.tochuuu.reactions.client.RemoteEyeConfig;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,10 +16,10 @@ import java.util.Map;
 import java.util.UUID;
 
 public final class ReactionsNetworking {
-    private static final ResourceLocation EYE_CONFIG_C2S = ResourceLocation.fromNamespaceAndPath(Reactions.MOD_ID, "eye_config_c2s");
-    private static final ResourceLocation EYE_CONFIG_S2C = ResourceLocation.fromNamespaceAndPath(Reactions.MOD_ID, "eye_config_s2c");
-    private static final ResourceLocation EYE_FOCUS_C2S = ResourceLocation.fromNamespaceAndPath(Reactions.MOD_ID, "eye_focus_c2s");
-    private static final ResourceLocation EYE_FOCUS_S2C = ResourceLocation.fromNamespaceAndPath(Reactions.MOD_ID, "eye_focus_s2c");
+    public static final ResourceLocation EYE_CONFIG_C2S = new ResourceLocation(Reactions.MOD_ID, "eye_config_c2s");
+    public static final ResourceLocation EYE_CONFIG_S2C = new ResourceLocation(Reactions.MOD_ID, "eye_config_s2c");
+    public static final ResourceLocation EYE_FOCUS_C2S = new ResourceLocation(Reactions.MOD_ID, "eye_focus_c2s");
+    public static final ResourceLocation EYE_FOCUS_S2C = new ResourceLocation(Reactions.MOD_ID, "eye_focus_s2c");
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
     private static final int MIN_EYE_FOCUS = -101;
@@ -459,7 +457,7 @@ public final class ReactionsNetworking {
         SERVER_PENDING_SYNC.put(player.getUUID(), SERVER_SYNC_RETRY_TICKS);
     }
 
-    private static void writeUpdateBody(RegistryFriendlyByteBuf buf, RemoteEyeConfig config) {
+    private static void writeUpdateBody(FriendlyByteBuf buf, RemoteEyeConfig config) {
         buf.writeUUID(config.playerId());
         buf.writeVarInt(config.entityId());
         buf.writeByte(config.leftEyeX());
@@ -477,7 +475,7 @@ public final class ReactionsNetworking {
         buf.writeByte(config.eyeHeight());
     }
 
-    private static RemoteEyeConfig readUpdateBody(RegistryFriendlyByteBuf buf) {
+    private static RemoteEyeConfig readUpdateBody(FriendlyByteBuf buf) {
         UUID playerId = buf.readUUID();
         int entityId = buf.readVarInt();
         int leftEyeX = buf.readUnsignedByte();
@@ -630,28 +628,17 @@ public final class ReactionsNetworking {
         void sendEyeFocusToPlayer(ServerPlayer player, EyeFocusS2CPayload payload);
     }
 
-    public record EyeConfigC2SPayload(RemoteEyeConfig config) implements CustomPacketPayload {
-        public static final Type<EyeConfigC2SPayload> TYPE = new Type<>(EYE_CONFIG_C2S);
-        public static final StreamCodec<RegistryFriendlyByteBuf, EyeConfigC2SPayload> STREAM_CODEC = StreamCodec.ofMember(EyeConfigC2SPayload::write, EyeConfigC2SPayload::read);
-
-        private static EyeConfigC2SPayload read(RegistryFriendlyByteBuf buf) {
+    public record EyeConfigC2SPayload(RemoteEyeConfig config) {
+        public static EyeConfigC2SPayload read(FriendlyByteBuf buf) {
             return new EyeConfigC2SPayload(readUpdateBody(buf));
         }
 
-        private void write(RegistryFriendlyByteBuf buf) {
+        public void write(FriendlyByteBuf buf) {
             writeUpdateBody(buf, config);
-        }
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
         }
     }
 
-    public record EyeConfigS2CPayload(int action, RemoteEyeConfig config, UUID playerId) implements CustomPacketPayload {
-        public static final Type<EyeConfigS2CPayload> TYPE = new Type<>(EYE_CONFIG_S2C);
-        public static final StreamCodec<RegistryFriendlyByteBuf, EyeConfigS2CPayload> STREAM_CODEC = StreamCodec.ofMember(EyeConfigS2CPayload::write, EyeConfigS2CPayload::read);
-
+    public record EyeConfigS2CPayload(int action, RemoteEyeConfig config, UUID playerId) {
         public static EyeConfigS2CPayload update(RemoteEyeConfig config) {
             return new EyeConfigS2CPayload(UPDATE, config, null);
         }
@@ -660,7 +647,7 @@ public final class ReactionsNetworking {
             return new EyeConfigS2CPayload(REMOVE, null, playerId);
         }
 
-        private static EyeConfigS2CPayload read(RegistryFriendlyByteBuf buf) {
+        public static EyeConfigS2CPayload read(FriendlyByteBuf buf) {
             int action = buf.readUnsignedByte();
             if (action == UPDATE) {
                 return update(readUpdateBody(buf));
@@ -668,7 +655,7 @@ public final class ReactionsNetworking {
             return remove(buf.readUUID());
         }
 
-        private void write(RegistryFriendlyByteBuf buf) {
+        public void write(FriendlyByteBuf buf) {
             buf.writeByte(action);
             if (action == UPDATE) {
                 writeUpdateBody(buf, config);
@@ -676,35 +663,19 @@ public final class ReactionsNetworking {
                 buf.writeUUID(playerId);
             }
         }
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
-        }
     }
 
-    public record EyeFocusC2SPayload(int focus) implements CustomPacketPayload {
-        public static final Type<EyeFocusC2SPayload> TYPE = new Type<>(EYE_FOCUS_C2S);
-        public static final StreamCodec<RegistryFriendlyByteBuf, EyeFocusC2SPayload> STREAM_CODEC = StreamCodec.ofMember(EyeFocusC2SPayload::write, EyeFocusC2SPayload::read);
-
-        private static EyeFocusC2SPayload read(RegistryFriendlyByteBuf buf) {
+    public record EyeFocusC2SPayload(int focus) {
+        public static EyeFocusC2SPayload read(FriendlyByteBuf buf) {
             return new EyeFocusC2SPayload(buf.readByte());
         }
 
-        private void write(RegistryFriendlyByteBuf buf) {
+        public void write(FriendlyByteBuf buf) {
             buf.writeByte(clamp(focus, MIN_EYE_FOCUS, MAX_EYE_FOCUS));
-        }
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
         }
     }
 
-    public record EyeFocusS2CPayload(int action, UUID playerId, int entityId, int focus) implements CustomPacketPayload {
-        public static final Type<EyeFocusS2CPayload> TYPE = new Type<>(EYE_FOCUS_S2C);
-        public static final StreamCodec<RegistryFriendlyByteBuf, EyeFocusS2CPayload> STREAM_CODEC = StreamCodec.ofMember(EyeFocusS2CPayload::write, EyeFocusS2CPayload::read);
-
+    public record EyeFocusS2CPayload(int action, UUID playerId, int entityId, int focus) {
         public static EyeFocusS2CPayload update(UUID playerId, int entityId, int focus) {
             return new EyeFocusS2CPayload(UPDATE, playerId, entityId, clamp(focus, MIN_EYE_FOCUS, MAX_EYE_FOCUS));
         }
@@ -713,7 +684,7 @@ public final class ReactionsNetworking {
             return new EyeFocusS2CPayload(REMOVE, playerId, 0, 0);
         }
 
-        private static EyeFocusS2CPayload read(RegistryFriendlyByteBuf buf) {
+        public static EyeFocusS2CPayload read(FriendlyByteBuf buf) {
             int action = buf.readUnsignedByte();
             UUID playerId = buf.readUUID();
             if (action == UPDATE) {
@@ -722,18 +693,13 @@ public final class ReactionsNetworking {
             return remove(playerId);
         }
 
-        private void write(RegistryFriendlyByteBuf buf) {
+        public void write(FriendlyByteBuf buf) {
             buf.writeByte(action);
             buf.writeUUID(playerId);
             if (action == UPDATE) {
                 buf.writeVarInt(entityId);
                 buf.writeByte(focus);
             }
-        }
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
         }
     }
 }

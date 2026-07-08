@@ -2,9 +2,9 @@ package me.tochuuu.reactions.neoforge;
 
 import me.tochuuu.reactions.client.ReactionsClient;
 import me.tochuuu.reactions.client.ReactionsConfigScreen;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.ModLoadingContext;
-import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.minecraftforge.client.ConfigScreenHandler;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.ModLoadingContext;
 
 final class ReactionsNeoForgeClient {
     private ReactionsNeoForgeClient() {
@@ -13,6 +13,6 @@ final class ReactionsNeoForgeClient {
     static void init(IEventBus modEventBus) {
         ReactionsClient.init();
         ReactionsNeoForgeNetworking.initClient(modEventBus);
-        ModLoadingContext.get().registerExtensionPoint(IConfigScreenFactory.class, () -> (container, parent) -> new ReactionsConfigScreen(parent));
+        ModLoadingContext.get().registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class, () -> new ConfigScreenHandler.ConfigScreenFactory((minecraft, parent) -> new ReactionsConfigScreen(parent)));
     }
 }

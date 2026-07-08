@@ -1,18 +1,17 @@
 package me.tochuuu.reactions.neoforge;
 
 import me.tochuuu.reactions.Reactions;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.common.Mod;
-import net.neoforged.fml.loading.FMLEnvironment;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
 @Mod(Reactions.MOD_ID)
 public final class ReactionsNeoForge {
-    public ReactionsNeoForge(IEventBus modEventBus) {
+    public ReactionsNeoForge() {
+        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         // Run our common setup.
         Reactions.init();
         ReactionsNeoForgeNetworking.init(modEventBus);
-        if (FMLEnvironment.dist.isClient()) {
-            ReactionsNeoForgeClient.init(modEventBus);
-        }
+        ReactionsNeoForgeClient.init(modEventBus);
     }
 }

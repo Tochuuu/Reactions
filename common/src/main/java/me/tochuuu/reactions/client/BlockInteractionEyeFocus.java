@@ -13,7 +13,7 @@ import net.minecraft.world.phys.Vec3;
 public final class BlockInteractionEyeFocus {
     private static final int RECENT_BLOCK_TICKS = 8;
     private static final double MAX_FOCUS_ANGLE = Math.toRadians(55.0D);
-    private static final float FOCUS_DEAD_ZONE = 0.30F;
+    private static final float FOCUS_DEAD_ZONE = 0.24F;
     private static final float BLOCK_FOCUS_STEP = 0.22F;
     private static final float READING_FOCUS_STEP = 0.08F;
     private static final float FOCUS_RELEASE_STEP = 0.18F;
@@ -21,7 +21,7 @@ public final class BlockInteractionEyeFocus {
     private static final int DIRECT_BLOCK_FOCUS_DOWN_SIGNAL = 101;
     private static final int DIRECT_BLOCK_FOCUS_UP_SIGNAL = -101;
     private static final float DIRECT_BLOCK_FOCUS_AMOUNT = 0.0F;
-    private static final double DIRECT_BLOCK_FOCUS_UP_Y_OFFSET = 0.25D;
+    private static final double DIRECT_BLOCK_FOCUS_PITCH_THRESHOLD = 0.28D;
     private static final int READING_FOCUS_CYCLE_TICKS = 52;
     private static BlockPos lastLookedBlock;
     private static BlockPos activeBlock;
@@ -140,13 +140,20 @@ public final class BlockInteractionEyeFocus {
         double forward = lookX * targetX + lookZ * targetZ;
         float focus = (float) clamp(-Math.atan2(side, forward) / MAX_FOCUS_ANGLE, -1.0D, 1.0D);
         if (Math.abs(focus) < FOCUS_DEAD_ZONE) {
-            return forward > 0.0D ? FocusTarget.direct(directFocusSignal(toBlock)) : FocusTarget.NONE;
+            int directSignal = forward > 0.0D ? directFocusSignal(look) : 0;
+            return directSignal != 0 ? FocusTarget.direct(directSignal) : FocusTarget.NONE;
         }
         return new FocusTarget(focus, 0);
     }
 
-    private static int directFocusSignal(Vec3 toBlock) {
-        return toBlock.y > DIRECT_BLOCK_FOCUS_UP_Y_OFFSET ? DIRECT_BLOCK_FOCUS_UP_SIGNAL : DIRECT_BLOCK_FOCUS_DOWN_SIGNAL;
+    private static int directFocusSignal(Vec3 look) {
+        if (look.y > DIRECT_BLOCK_FOCUS_PITCH_THRESHOLD) {
+            return DIRECT_BLOCK_FOCUS_UP_SIGNAL;
+        }
+        if (look.y < -DIRECT_BLOCK_FOCUS_PITCH_THRESHOLD) {
+            return DIRECT_BLOCK_FOCUS_DOWN_SIGNAL;
+        }
+        return 0;
     }
 
     private static void updateFocus(float focus, int directFocusSignal, float step) {

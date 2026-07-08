@@ -1,7 +1,9 @@
 package me.tochuuu.reactions.client;
 
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Avatar;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemUseAnimation;
 
 import java.util.HashMap;
@@ -13,7 +15,7 @@ public final class PlayerActionAnimationState {
     private static final double FALL_SURPRISE_SPEED = -0.35D;
     private static final int FALL_SURPRISE_MIN_TICKS = 30;
     private static final int LANDING_BLINK_TICKS = 7;
-    private static final Snapshot EMPTY = new Snapshot(MouthUseAnimation.NONE, false, false);
+    private static final Snapshot EMPTY = new Snapshot(MouthUseAnimation.NONE, false, false, 0.0F);
     private static final Map<Integer, Snapshot> SNAPSHOTS = new HashMap<>();
     private static final Map<Integer, Float> FALL_DISTANCE_PEAKS = new HashMap<>();
     private static final Map<Integer, Float> VISIBLE_FALL_DISTANCE_PEAKS = new HashMap<>();
@@ -26,11 +28,11 @@ public final class PlayerActionAnimationState {
     private PlayerActionAnimationState() {
     }
 
-    public static void capture(Avatar player, AvatarRenderState state) {
+    public static void capture(Avatar player, AvatarRenderState state, float partialTick) {
         int entityId = player.getId();
         MouthUseAnimation mouthUseAnimation = mouthUseAnimation(player);
         FallState fallState = fallState(player, state);
-        SNAPSHOTS.put(entityId, new Snapshot(mouthUseAnimation, fallState.surprise(), fallState.landingBlink()));
+        SNAPSHOTS.put(entityId, new Snapshot(mouthUseAnimation, fallState.surprise(), fallState.landingBlink(), mountedYawDelta(player, state, partialTick)));
     }
 
     public static Snapshot snapshot(int entityId) {
@@ -115,6 +117,17 @@ public final class PlayerActionAnimationState {
             || player.isFallFlying();
     }
 
+    private static float mountedYawDelta(Avatar player, AvatarRenderState state, float partialTick) {
+        if (!state.isPassenger) {
+            return 0.0F;
+        }
+
+        Entity vehicle = player.getVehicle();
+        float referenceYaw = vehicle == null ? player.getPreciseBodyRotation(partialTick) : vehicle.getYRot(partialTick);
+        float headYaw = Mth.rotLerp(partialTick, player.yHeadRotO, player.yHeadRot);
+        return Mth.wrapDegrees(headYaw - referenceYaw);
+    }
+
     private static boolean isFallingFastEnough(Avatar player) {
         int entityId = player.getId();
         return player.fallDistance >= FALL_SURPRISE_DISTANCE
@@ -129,7 +142,7 @@ public final class PlayerActionAnimationState {
         DRINKING
     }
 
-    public record Snapshot(MouthUseAnimation mouthUseAnimation, boolean fallingSurprise, boolean landingBlink) {
+    public record Snapshot(MouthUseAnimation mouthUseAnimation, boolean fallingSurprise, boolean landingBlink, float mountedYawDelta) {
     }
 
     private record FallState(boolean surprise, boolean landingBlink) {

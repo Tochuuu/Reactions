@@ -35,6 +35,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final float HEAD_FRONT_U = 8.0F;
     private static final float HEAD_FRONT_V = 8.0F;
     private static final float HEAD_FACE_Z = -4.004F / 16.0F;
+    private static final float PUPIL_FACE_Z = -4.010F / 16.0F;
     private static final float MOUTH_COVER_FACE_Z = -4.018F / 16.0F;
     private static final float MOUTH_FACE_Z = -4.026F / 16.0F;
     private static final float EYE_UV_INSET = 0.24F;
@@ -54,7 +55,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final int BOW_FULL_CHARGE_TICKS = 20;
     private static final float SQUINT_VISIBLE_EYE_COVERAGE = 0.5F;
     private static final float HURT_SCLERA_EXTENSION = 0.5F;
-    private static final float LOOK_DOWN_SCLERA_BOTTOM_COVERAGE = 0.22F;
+    private static final float LOOK_DOWN_SCLERA_BOTTOM_COVERAGE = 0.16F;
     private static final float BLOCK_FOCUS_EYE_THRESHOLD = 0.25F;
     private static final float MOUNTED_BACK_LOOK_THRESHOLD = 75.0F;
     private static final float FALL_SURPRISE_DISTANCE = 3.0F;
@@ -595,6 +596,22 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             .setNormal(pose, 0.0F, 0.0F, -1.0F);
     }
 
+    private static void pupilQuad(VertexConsumer consumer, PoseStack.Pose pose, float x1, float y1, float x2, float y2, float u1, float v1, float u2, float v2, int light, int overlay, int color) {
+        pupilVertex(consumer, pose, x1, y2, u1, v2, light, overlay, color);
+        pupilVertex(consumer, pose, x2, y2, u2, v2, light, overlay, color);
+        pupilVertex(consumer, pose, x2, y1, u2, v1, light, overlay, color);
+        pupilVertex(consumer, pose, x1, y1, u1, v1, light, overlay, color);
+    }
+
+    private static void pupilVertex(VertexConsumer consumer, PoseStack.Pose pose, float x, float y, float u, float v, int light, int overlay, int color) {
+        consumer.addVertex(pose, x / 16.0F, y / 16.0F, PUPIL_FACE_Z)
+            .setColor(color)
+            .setUv(u, v)
+            .setOverlay(overlay)
+            .setLight(light)
+            .setNormal(pose, 0.0F, 0.0F, -1.0F);
+    }
+
     private static void submitMouth(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, EyeSettings eyes) {
         float dstX1 = eyes.leftMouthX - HEAD_FRONT_U - 4.0F;
         float dstY1 = eyes.leftMouthY - HEAD_FRONT_V - 8.0F;
@@ -731,11 +748,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             float pupilSourceY = eyeLook == DIRECT_BLOCK_FOCUS_UP_SIGNAL ? sourceY + sourceHeight - visibleSourceHeight : sourceY;
             float pupilDstY1 = eyeLook == DIRECT_BLOCK_FOCUS_DOWN_SIGNAL ? dstY1 + verticalSclera : dstY1;
             float pupilDstY2 = pupilDstY1 + visibleRowHeight;
-            submitEyePiece(poseStack, consumer, light, overlay, skinX + pupilSourceColumn, pupilSourceY, 1.0F, visibleSourceHeight, dstX1 + pupilColumn, pupilDstY1, dstX1 + pupilColumn + 1.0F, pupilDstY2, NORMAL_COLOR);
+            submitPupilPiece(poseStack, consumer, light, overlay, skinX + pupilSourceColumn, pupilSourceY, 1.0F, visibleSourceHeight, dstX1 + pupilColumn, pupilDstY1, dstX1 + pupilColumn + 1.0F, pupilDstY2, NORMAL_COLOR);
             return;
         }
 
-        submitEyePiece(poseStack, consumer, light, overlay, skinX + pupilSourceColumn, sourceY, 1.0F, sourceHeight, dstX1 + pupilColumn, dstY1, dstX1 + pupilColumn + 1.0F, dstY2, NORMAL_COLOR);
+        submitPupilPiece(poseStack, consumer, light, overlay, skinX + pupilSourceColumn, sourceY, 1.0F, sourceHeight, dstX1 + pupilColumn, dstY1, dstX1 + pupilColumn + 1.0F, dstY2, NORMAL_COLOR);
     }
 
     private static void submitEyePiece(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, float sourceX, float sourceY, float sourceWidth, float sourceHeight, float dstX1, float dstY1, float dstX2, float dstY2, int color) {
@@ -746,6 +763,16 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         float u2 = (sourceX + sourceWidth - insetX) / SKIN_SIZE;
         float v2 = (sourceY + sourceHeight - insetY) / SKIN_SIZE;
         quad(consumer, poseStack.last(), dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color);
+    }
+
+    private static void submitPupilPiece(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, float sourceX, float sourceY, float sourceWidth, float sourceHeight, float dstX1, float dstY1, float dstX2, float dstY2, int color) {
+        float insetX = Math.min(EYE_UV_INSET, sourceWidth * 0.25F);
+        float insetY = Math.min(EYE_UV_INSET, sourceHeight * 0.25F);
+        float u1 = (sourceX + insetX) / SKIN_SIZE;
+        float v1 = (sourceY + insetY) / SKIN_SIZE;
+        float u2 = (sourceX + sourceWidth - insetX) / SKIN_SIZE;
+        float v2 = (sourceY + sourceHeight - insetY) / SKIN_SIZE;
+        pupilQuad(consumer, poseStack.last(), dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color);
     }
 
     private static void submitEyelidTexture(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int eyelidX, int eyelidY, int tileColumns, int tileRows, float dstX1, float dstY1, float dstX2, float dstY2, int color) {

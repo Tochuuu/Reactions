@@ -24,6 +24,6 @@ public abstract class AvatarRendererMixin {
 
     @Inject(method = "extractRenderState(Lnet/minecraft/client/player/AbstractClientPlayer;Lnet/minecraft/client/renderer/entity/state/PlayerRenderState;F)V", at = @At("TAIL"))
     private void reactions$captureActionState(AbstractClientPlayer player, PlayerRenderState state, float partialTick, CallbackInfo ci) {
-        PlayerActionAnimationState.capture(player, state);
+        PlayerActionAnimationState.capture(player, state, partialTick);
     }
 }

@@ -13,7 +13,7 @@ import net.minecraft.world.phys.Vec3;
 public final class BlockInteractionEyeFocus {
     private static final int RECENT_BLOCK_TICKS = 8;
     private static final double MAX_FOCUS_ANGLE = Math.toRadians(55.0D);
-    private static final float FOCUS_DEAD_ZONE = 0.18F;
+    private static final float FOCUS_DEAD_ZONE = 0.30F;
     private static final float BLOCK_FOCUS_STEP = 0.22F;
     private static final float READING_FOCUS_STEP = 0.08F;
     private static final float FOCUS_RELEASE_STEP = 0.18F;
@@ -138,7 +138,7 @@ public final class BlockInteractionEyeFocus {
         double lookZ = look.z / lookLength;
         double side = lookX * targetZ - lookZ * targetX;
         double forward = lookX * targetX + lookZ * targetZ;
-        float focus = (float) clamp(Math.atan2(side, forward) / MAX_FOCUS_ANGLE, -1.0D, 1.0D);
+        float focus = (float) clamp(-Math.atan2(side, forward) / MAX_FOCUS_ANGLE, -1.0D, 1.0D);
         if (Math.abs(focus) < FOCUS_DEAD_ZONE) {
             return forward > 0.0D ? FocusTarget.direct(directFocusSignal(toBlock)) : FocusTarget.NONE;
         }

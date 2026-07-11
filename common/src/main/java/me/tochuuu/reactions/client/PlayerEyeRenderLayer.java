@@ -113,11 +113,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
 
         poseStack.pushPose();
         translateToFacePose(poseStack);
-        int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
-        int eyeOverlay = config.cleanEyelidColor ? OverlayTexture.NO_OVERLAY : overlay;
-        int eyelidColor = eyelidColor(config, eyes.eyeHeight);
-        submitEye(poseStack, bufferSource, renderType, light, eyeOverlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, eyelidColor);
-        submitEye(poseStack, bufferSource, renderType, light, eyeOverlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, eyelidColor);
+        int overlay = config.cleanEyelidColor ? OverlayTexture.NO_OVERLAY : OverlayTexture.pack(0.0F, state.hasRedOverlay);
+        int eyelidColor = eyelidColor(config.cleanEyelidColor, eyes.eyeHeight);
+        submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, eyelidColor);
+        submitEye(poseStack, bufferSource, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, eyelidColor);
         if (mouthAnimationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, bufferSource, renderType, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
@@ -133,7 +132,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
     private void renderMouthOnly(PoseStack poseStack, MultiBufferSource bufferSource, int light, PlayerRenderState state, RenderType renderType, boolean animationsEnabled, EyeSettings eyes) {
         poseStack.pushPose();
         translateToFacePose(poseStack);
-        int overlay = OverlayTexture.pack(0.0F, state.hasRedOverlay);
+        int overlay = ReactionsClientConfig.get().cleanEyelidColor ? OverlayTexture.NO_OVERLAY : OverlayTexture.pack(0.0F, state.hasRedOverlay);
         if (animationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, bufferSource, renderType, light, overlay, eyes);
         } else {
@@ -704,26 +703,19 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
     }
 
     private static boolean canUseBlockEyeAnimation(int eyeWidth, int eyeHeight) {
-        return eyeWidth == 2 && (eyeHeight == 1 || eyeHeight == 2);
+        return eyeWidth == 2 && eyeHeight >= 1 && eyeHeight <= 3;
     }
 
     private static void submitBlockEye(PoseStack poseStack, MultiBufferSource bufferSource, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, EyeSide side, int eyeLook, boolean hurtSclera) {
-        int browHeight = eyeHeight == 2 ? 1 : 0;
-        if (browHeight > 0) {
-            submitEyePiece(poseStack, bufferSource, renderType, light, overlay, skinX, skinY, eyeWidth, browHeight, dstX1, dstY1, dstX1 + eyeWidth, dstY1 + browHeight, NORMAL_COLOR);
-        }
-
-        float eyeDstY1 = dstY1 + browHeight;
+        float eyeDstY1 = dstY1;
         float eyeDstY2 = dstY1 + eyeHeight;
-        float eyeSourceY = skinY + browHeight;
-        float eyeSourceHeight = eyeHeight - browHeight;
 
         if (hurtSclera) {
             int externalColumn = externalScleraColumn(side);
-            submitEyePiece(poseStack, bufferSource, renderType, light, overlay, skinX + externalColumn, eyeSourceY, 1.0F, eyeSourceHeight, dstX1, eyeDstY1 - HURT_SCLERA_EXTENSION, dstX1 + eyeWidth, eyeDstY1, NORMAL_COLOR);
+            submitEyePiece(poseStack, bufferSource, renderType, light, overlay, skinX + externalColumn, skinY, 1.0F, eyeHeight, dstX1, eyeDstY1 - HURT_SCLERA_EXTENSION, dstX1 + eyeWidth, eyeDstY1, NORMAL_COLOR);
         }
 
-        submitBlockEyeRow(poseStack, bufferSource, renderType, light, overlay, skinX, eyeSourceY, eyeSourceHeight, dstX1, eyeDstY1, eyeDstY2, side, eyeLook);
+        submitBlockEyeRow(poseStack, bufferSource, renderType, light, overlay, skinX, skinY, eyeHeight, dstX1, eyeDstY1, eyeDstY2, side, eyeLook);
     }
 
     private static void submitBlockEyeRow(PoseStack poseStack, MultiBufferSource bufferSource, RenderType renderType, int light, int overlay, int skinX, float sourceY, float sourceHeight, float dstX1, float dstY1, float dstY2, EyeSide side, int eyeLook) {
@@ -801,8 +793,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         quad(bufferSource.getBuffer(renderType), poseStack.last(), dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color);
     }
 
-    private static int eyelidColor(ReactionsClientConfig config, int eyeHeight) {
-        if (config.cleanEyelidColor) {
+    private static int eyelidColor(boolean cleanEyelidColor, int eyeHeight) {
+        if (cleanEyelidColor) {
             return NORMAL_COLOR;
         }
         return eyeHeight > 1 ? LARGE_EYELID_DARKEN_COLOR : EYELID_DARKEN_COLOR;
@@ -866,8 +858,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<PlayerRenderState, P
         float sourceVisibleHeight = eyeHeight * SQUINT_VISIBLE_EYE_COVERAGE;
         float sourceY1 = skinY + eyeHeight - sourceVisibleHeight;
         if (canUseBlockEyeAnimation(eyeWidth, eyeHeight)) {
-            int browHeight = eyeHeight == 2 ? 1 : 0;
-            submitBlockEyeRow(poseStack, bufferSource, renderType, light, overlay, skinX, skinY + browHeight, eyeHeight - browHeight, dstX1, splitY, dstY2, side, eyeLook);
+            submitBlockEyeRow(poseStack, bufferSource, renderType, light, overlay, skinX, sourceY1, sourceVisibleHeight, dstX1, splitY, dstY2, side, eyeLook);
             return;
         }
 

@@ -7,6 +7,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
@@ -24,6 +25,8 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     private static final Identifier EYE_FOCUS_S2C = Identifier.fromNamespaceAndPath("reactions", "eye_focus_s2c");
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
+    private static final int MIN_EYE_FOCUS = -101;
+    private static final int MAX_EYE_FOCUS = 101;
     private static final int LEGACY_CONFIG_VALUE_COUNT = 8;
     private static final int CONFIG_VALUE_COUNT = 13;
     private static final int SERVER_SYNC_RETRY_TICKS = 20 * 30;
@@ -53,7 +56,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     }
 
     private static void handleFocus(ServerPlayer source, int focus) {
-        int clampedFocus = clamp(focus, -100, 100);
+        int clampedFocus = clamp(focus, MIN_EYE_FOCUS, MAX_EYE_FOCUS);
         if (clampedFocus == 0) {
             FOCUSES.remove(source.getUUID());
         } else {
@@ -85,7 +88,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
             }
 
             entry.setValue(entry.getValue() - 10);
-            if (canSend(player)) {
+            if (canSendConfig(player)) {
                 if (sendKnownConfigs(player)) {
                     iterator.remove();
                 }
@@ -94,7 +97,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     }
 
     private static boolean sendKnownConfigs(ServerPlayer player) {
-        if (!canSend(player)) {
+        if (!canSendConfig(player)) {
             PENDING_SYNC.put(player.getUUID(), SERVER_SYNC_RETRY_TICKS);
             return false;
         }
@@ -127,16 +130,20 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         }
     }
 
-    private static boolean canSend(ServerPlayer player) {
-        return ServerPlayNetworking.canSend(player, EyeConfigS2CPayload.TYPE);
+    private static boolean canSendConfig(ServerPlayer player) {
+        return ServerPlayNetworking.canSend(player, EyeConfigS2CPayload.TYPE) || CONFIGS.containsKey(player.getUUID());
     }
 
     private static boolean send(ServerPlayer player, EyeConfigS2CPayload payload) {
-        if (!canSend(player)) {
+        if (!canSendConfig(player)) {
             return false;
         }
         try {
-            ServerPlayNetworking.send(player, payload);
+            if (ServerPlayNetworking.canSend(player, EyeConfigS2CPayload.TYPE)) {
+                ServerPlayNetworking.send(player, payload);
+            } else {
+                player.connection.send(new ClientboundCustomPayloadPacket(payload));
+            }
             return true;
         } catch (RuntimeException ignored) {
             return false;
@@ -144,15 +151,23 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     }
 
     private static boolean sendFocus(ServerPlayer player, EyeFocusS2CPayload payload) {
-        if (!ServerPlayNetworking.canSend(player, EyeFocusS2CPayload.TYPE)) {
+        if (!canSendFocus(player)) {
             return false;
         }
         try {
-            ServerPlayNetworking.send(player, payload);
+            if (ServerPlayNetworking.canSend(player, EyeFocusS2CPayload.TYPE)) {
+                ServerPlayNetworking.send(player, payload);
+            } else {
+                player.connection.send(new ClientboundCustomPayloadPacket(payload));
+            }
             return true;
         } catch (RuntimeException ignored) {
             return false;
         }
+    }
+
+    private static boolean canSendFocus(ServerPlayer player) {
+        return ServerPlayNetworking.canSend(player, EyeFocusS2CPayload.TYPE) || CONFIGS.containsKey(player.getUUID());
     }
 
     private static void writeConfig(RegistryFriendlyByteBuf buf, EyeConfig config) {
@@ -185,6 +200,9 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     }
 
     private record EyeFocus(UUID playerId, int entityId, int focus) {
+        private EyeFocus {
+            focus = clamp(focus, MIN_EYE_FOCUS, MAX_EYE_FOCUS);
+        }
     }
 
     private record EyeConfigC2SPayload(EyeConfig config) implements CustomPacketPayload {
@@ -249,7 +267,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         }
 
         private void write(RegistryFriendlyByteBuf buf) {
-            buf.writeByte(clamp(focus, -100, 100));
+            buf.writeByte(clamp(focus, MIN_EYE_FOCUS, MAX_EYE_FOCUS));
         }
 
         @Override

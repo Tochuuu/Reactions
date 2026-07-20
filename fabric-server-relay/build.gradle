@@ -8,10 +8,17 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"
 }
 
+def relayMinecraftDependency = rootProject.findProperty('minecraft_dependency') ?: rootProject.minecraft_version
+def relayFabricApiDependency = rootProject.findProperty('fabric_api_dependency') ?: ">=${rootProject.fabric_api_version}"
+
 processResources {
     inputs.property 'version', project.version
+    inputs.property 'minecraft_dependency', relayMinecraftDependency
+    inputs.property 'fabric_api_dependency', relayFabricApiDependency
 
     filesMatching('fabric.mod.json') {
-        expand version: project.version
+        expand version: project.version,
+            minecraft_dependency: relayMinecraftDependency,
+            fabric_api_dependency: relayFabricApiDependency
     }
 }

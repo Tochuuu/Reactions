@@ -684,7 +684,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     }
 
     private static boolean canUseBlockEyeAnimation(int eyeWidth, int eyeHeight) {
-        return eyeWidth == 2 && eyeHeight >= 1 && eyeHeight <= 3;
+        return eyeWidth == 2 && eyeHeight >= 1 && eyeHeight <= 3 || eyeWidth == 3 && eyeHeight >= 1 && eyeHeight <= 2;
     }
 
     private static void submitBlockEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, EyeSide side, EyeLook eyeLook, boolean hurtSclera) {
@@ -692,21 +692,22 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float eyeDstY2 = dstY1 + eyeHeight;
 
         if (hurtSclera) {
-            int externalColumn = externalScleraColumn(side);
+            int externalColumn = externalScleraColumn(side, eyeWidth);
             submitEyePiece(poseStack, collector, renderType, light, overlay, skinX + externalColumn, skinY, 1.0F, eyeHeight, dstX1, eyeDstY1 - HURT_SCLERA_EXTENSION, dstX1 + eyeWidth, eyeDstY1, NORMAL_COLOR);
         }
 
-        submitBlockEyeRow(poseStack, collector, renderType, light, overlay, skinX, skinY, eyeHeight, dstX1, eyeDstY1, eyeDstY2, side, eyeLook);
+        submitBlockEyeRow(poseStack, collector, renderType, light, overlay, skinX, skinY, eyeWidth, eyeHeight, dstX1, eyeDstY1, eyeDstY2, side, eyeLook);
     }
 
-    private static void submitBlockEyeRow(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, float sourceY, float sourceHeight, float dstX1, float dstY1, float dstY2, EyeSide side, EyeLook eyeLook) {
-        int scleraSourceColumn = externalScleraColumn(side);
-        for (int column = 0; column < 2; column++) {
+    private static void submitBlockEyeRow(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, float sourceY, int eyeWidth, float sourceHeight, float dstX1, float dstY1, float dstY2, EyeSide side, EyeLook eyeLook) {
+        int scleraSourceColumn = externalScleraColumn(side, eyeWidth);
+        for (int column = 0; column < eyeWidth; column++) {
             submitEyePiece(poseStack, collector, renderType, light, overlay, skinX + scleraSourceColumn, sourceY, 1.0F, sourceHeight, dstX1 + column, dstY1, dstX1 + column + 1.0F, dstY2, NORMAL_COLOR);
         }
 
-        int pupilColumn = pupilDestinationColumn(side, eyeLook);
-        int pupilSourceColumn = internalPupilColumn(side);
+        int pupilWidth = pupilWidth(eyeWidth);
+        int pupilColumn = pupilDestinationColumn(side, eyeLook, eyeWidth, pupilWidth);
+        int pupilSourceColumn = internalPupilColumn(side, eyeWidth, pupilWidth);
         float rowHeight = dstY2 - dstY1;
         if (eyeLook == EyeLook.UP || eyeLook == EyeLook.DOWN) {
             float verticalSclera = rowHeight * LOOK_DOWN_SCLERA_BOTTOM_COVERAGE;
@@ -715,11 +716,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             float pupilSourceY = eyeLook == EyeLook.UP ? sourceY + sourceHeight - visibleSourceHeight : sourceY;
             float pupilDstY1 = eyeLook == EyeLook.DOWN ? dstY1 + verticalSclera : dstY1;
             float pupilDstY2 = pupilDstY1 + visibleRowHeight;
-            submitPupilPiece(poseStack, collector, renderType, light, overlay, skinX + pupilSourceColumn, pupilSourceY, 1.0F, visibleSourceHeight, dstX1 + pupilColumn, pupilDstY1, dstX1 + pupilColumn + 1.0F, pupilDstY2, NORMAL_COLOR);
+            submitPupilPiece(poseStack, collector, renderType, light, overlay, skinX + pupilSourceColumn, pupilSourceY, pupilWidth, visibleSourceHeight, dstX1 + pupilColumn, pupilDstY1, dstX1 + pupilColumn + pupilWidth, pupilDstY2, NORMAL_COLOR);
             return;
         }
 
-        submitPupilPiece(poseStack, collector, renderType, light, overlay, skinX + pupilSourceColumn, sourceY, 1.0F, sourceHeight, dstX1 + pupilColumn, dstY1, dstX1 + pupilColumn + 1.0F, dstY2, NORMAL_COLOR);
+        submitPupilPiece(poseStack, collector, renderType, light, overlay, skinX + pupilSourceColumn, sourceY, pupilWidth, sourceHeight, dstX1 + pupilColumn, dstY1, dstX1 + pupilColumn + pupilWidth, dstY2, NORMAL_COLOR);
     }
 
     private static void submitEyePiece(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, float sourceX, float sourceY, float sourceWidth, float sourceHeight, float dstX1, float dstY1, float dstX2, float dstY2, int color) {
@@ -808,22 +809,26 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return alpha | red << 16 | green << 8 | blue;
     }
 
-    private static int internalPupilColumn(EyeSide side) {
-        return side == EyeSide.LEFT ? 1 : 0;
+    private static int pupilWidth(int eyeWidth) {
+        return Math.max(1, eyeWidth - 1);
     }
 
-    private static int externalScleraColumn(EyeSide side) {
-        return side == EyeSide.LEFT ? 0 : 1;
+    private static int internalPupilColumn(EyeSide side, int eyeWidth, int pupilWidth) {
+        return side == EyeSide.LEFT ? eyeWidth - pupilWidth : 0;
     }
 
-    private static int pupilDestinationColumn(EyeSide side, EyeLook eyeLook) {
+    private static int externalScleraColumn(EyeSide side, int eyeWidth) {
+        return side == EyeSide.LEFT ? 0 : eyeWidth - 1;
+    }
+
+    private static int pupilDestinationColumn(EyeSide side, EyeLook eyeLook, int eyeWidth, int pupilWidth) {
         if (eyeLook == EyeLook.LEFT) {
             return 0;
         }
         if (eyeLook == EyeLook.RIGHT) {
-            return 1;
+            return eyeWidth - pupilWidth;
         }
-        return internalPupilColumn(side);
+        return internalPupilColumn(side, eyeWidth, pupilWidth);
     }
 
     private static boolean shouldMirrorEyeColumns(EyeLook eyeLook, EyeSide side) {
@@ -840,7 +845,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float sourceVisibleHeight = eyeHeight * SQUINT_VISIBLE_EYE_COVERAGE;
         float sourceY1 = skinY + eyeHeight - sourceVisibleHeight;
         if (canUseBlockEyeAnimation(eyeWidth, eyeHeight)) {
-            submitBlockEyeRow(poseStack, collector, renderType, light, overlay, skinX, sourceY1, sourceVisibleHeight, dstX1, splitY, dstY2, side, eyeLook);
+            submitBlockEyeRow(poseStack, collector, renderType, light, overlay, skinX, sourceY1, eyeWidth, sourceVisibleHeight, dstX1, splitY, dstY2, side, eyeLook);
             return;
         }
 

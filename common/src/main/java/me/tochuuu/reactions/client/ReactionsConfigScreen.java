@@ -26,8 +26,6 @@ public final class ReactionsConfigScreen extends Screen {
     private static final int FACE_PANEL_GAP = 18;
     private static final int GAP = 8;
     private static final int BUTTON_HEIGHT = 20;
-    private static final int MAX_EYE_WIDTH = 2;
-    private static final int MAX_EYE_HEIGHT = 3;
     private static final int SIZE_LIMIT_MESSAGE_TICKS = 60;
     private static final int MOUTH_PIXELS = 2;
 
@@ -251,18 +249,16 @@ public final class ReactionsConfigScreen extends Screen {
     private void addSizeButton(int x, int y, boolean width, int delta, int size) {
         addRenderableWidget(Button.builder(Component.literal(delta < 0 ? "-" : "+"), button -> {
             ReactionsClientConfig config = ReactionsClientConfig.get();
+            int nextEyeWidth = width ? config.eyeWidth + delta : config.eyeWidth;
+            int nextEyeHeight = width ? config.eyeHeight : config.eyeHeight + delta;
+            if (!ReactionsClientConfig.isAllowedEyeSize(nextEyeWidth, nextEyeHeight)) {
+                showSizeLimitMessage();
+                return;
+            }
             if (width) {
-                if (delta > 0 && config.eyeWidth >= MAX_EYE_WIDTH) {
-                    showSizeLimitMessage();
-                    return;
-                }
-                config.eyeWidth += delta;
+                config.eyeWidth = nextEyeWidth;
             } else {
-                if (delta > 0 && config.eyeHeight >= MAX_EYE_HEIGHT) {
-                    showSizeLimitMessage();
-                    return;
-                }
-                config.eyeHeight += delta;
+                config.eyeHeight = nextEyeHeight;
             }
             ReactionsClientConfig.save();
             rebuildWidgets();

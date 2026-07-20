@@ -19,4 +19,11 @@ public record RemoteEyeConfig(
     int eyeWidth,
     int eyeHeight
 ) {
+    public RemoteEyeConfig {
+        eyeWidth = ReactionsClientConfig.clampEyeWidth(eyeWidth);
+        eyeHeight = ReactionsClientConfig.clampEyeHeight(eyeHeight);
+        if (ReactionsClientConfig.isBlockedEyeSize(eyeWidth, eyeHeight)) {
+            eyeHeight = 2;
+        }
+    }
 }

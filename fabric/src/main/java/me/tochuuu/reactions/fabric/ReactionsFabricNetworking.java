@@ -56,7 +56,8 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
 
     @Override
     public boolean canSendEyeFocusToPlayer(ServerPlayer player) {
-        return ServerPlayNetworking.canSend(player, ReactionsNetworking.EYE_FOCUS_S2C);
+        return ServerPlayNetworking.canSend(player, ReactionsNetworking.EYE_FOCUS_S2C)
+            || ReactionsNetworking.hasServerConfig(player.getUUID());
     }
 
     @Override
@@ -81,7 +82,12 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
 
     @Override
     public void sendEyeFocusToPlayer(ServerPlayer player, ReactionsNetworking.EyeFocusS2CPayload payload) {
-        ServerPlayNetworking.send(player, ReactionsNetworking.EYE_FOCUS_S2C, buffer(payload::write));
+        if (ServerPlayNetworking.canSend(player, ReactionsNetworking.EYE_FOCUS_S2C)) {
+            ServerPlayNetworking.send(player, ReactionsNetworking.EYE_FOCUS_S2C, buffer(payload::write));
+            return;
+        }
+
+        player.connection.send(new ClientboundCustomPayloadPacket(ReactionsNetworking.EYE_FOCUS_S2C, buffer(payload::write)));
     }
 
     protected static FriendlyByteBuf buffer(Consumer<FriendlyByteBuf> writer) {

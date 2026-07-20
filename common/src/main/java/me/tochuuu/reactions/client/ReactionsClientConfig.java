@@ -19,6 +19,10 @@ import java.util.Map;
 
 public final class ReactionsClientConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    public static final int MIN_EYE_WIDTH = 1;
+    public static final int MAX_EYE_WIDTH = 3;
+    public static final int MIN_EYE_HEIGHT = 1;
+    public static final int MAX_EYE_HEIGHT = 3;
     private static ReactionsClientConfig instance;
 
     public boolean enabled = true;
@@ -129,8 +133,11 @@ public final class ReactionsClientConfig {
         if (playerOverrides == null) {
             playerOverrides = new HashMap<>();
         }
-        eyeWidth = clamp(eyeWidth, 1, 2);
-        eyeHeight = clamp(eyeHeight, 1, 3);
+        eyeWidth = clampEyeWidth(eyeWidth);
+        eyeHeight = clampEyeHeight(eyeHeight);
+        if (isBlockedEyeSize(eyeWidth, eyeHeight)) {
+            eyeHeight = 2;
+        }
         leftEyeX = clamp(leftEyeX, 8, 16 - eyeWidth);
         leftEyeY = clamp(leftEyeY, 8, 16 - eyeHeight);
         rightEyeX = clamp(rightEyeX, 8, 16 - eyeWidth);
@@ -145,6 +152,24 @@ public final class ReactionsClientConfig {
         blinkIntervalTicks = clamp(blinkIntervalTicks, 20, 400);
         blinkDurationTicks = clamp(blinkDurationTicks, 1, 20);
         playerOverrides.values().forEach(PlayerOverride::clamp);
+    }
+
+    public static int clampEyeWidth(int eyeWidth) {
+        return clamp(eyeWidth, MIN_EYE_WIDTH, MAX_EYE_WIDTH);
+    }
+
+    public static int clampEyeHeight(int eyeHeight) {
+        return clamp(eyeHeight, MIN_EYE_HEIGHT, MAX_EYE_HEIGHT);
+    }
+
+    public static boolean isBlockedEyeSize(int eyeWidth, int eyeHeight) {
+        return eyeWidth == MAX_EYE_WIDTH && eyeHeight == MAX_EYE_HEIGHT;
+    }
+
+    public static boolean isAllowedEyeSize(int eyeWidth, int eyeHeight) {
+        return eyeWidth >= MIN_EYE_WIDTH && eyeWidth <= MAX_EYE_WIDTH
+            && eyeHeight >= MIN_EYE_HEIGHT && eyeHeight <= MAX_EYE_HEIGHT
+            && !isBlockedEyeSize(eyeWidth, eyeHeight);
     }
 
     private static int clamp(int value, int min, int max) {
@@ -190,8 +215,11 @@ public final class ReactionsClientConfig {
         }
 
         private void clamp() {
-            eyeWidth = ReactionsClientConfig.clamp(eyeWidth, 1, 2);
-            eyeHeight = ReactionsClientConfig.clamp(eyeHeight, 1, 3);
+            eyeWidth = ReactionsClientConfig.clampEyeWidth(eyeWidth);
+            eyeHeight = ReactionsClientConfig.clampEyeHeight(eyeHeight);
+            if (ReactionsClientConfig.isBlockedEyeSize(eyeWidth, eyeHeight)) {
+                eyeHeight = 2;
+            }
             leftEyeX = ReactionsClientConfig.clamp(leftEyeX, 8, 16 - eyeWidth);
             leftEyeY = ReactionsClientConfig.clamp(leftEyeY, 8, 16 - eyeHeight);
             rightEyeX = ReactionsClientConfig.clamp(rightEyeX, 8, 16 - eyeWidth);

@@ -1,14 +1,12 @@
 package me.tochuuu.reactions.fabric.server;
 
+import io.netty.buffer.Unpooled;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.network.RegistryFriendlyByteBuf;
-import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
-import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.protocol.game.ClientboundCustomPayloadPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -17,12 +15,13 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 public final class ReactionsFabricServerRelay implements ModInitializer {
-    private static final ResourceLocation EYE_CONFIG_C2S = ResourceLocation.fromNamespaceAndPath("reactions", "eye_config_c2s");
-    private static final ResourceLocation EYE_CONFIG_S2C = ResourceLocation.fromNamespaceAndPath("reactions", "eye_config_s2c");
-    private static final ResourceLocation EYE_FOCUS_C2S = ResourceLocation.fromNamespaceAndPath("reactions", "eye_focus_c2s");
-    private static final ResourceLocation EYE_FOCUS_S2C = ResourceLocation.fromNamespaceAndPath("reactions", "eye_focus_s2c");
+    private static final ResourceLocation EYE_CONFIG_C2S = new ResourceLocation("reactions", "eye_config_c2s");
+    private static final ResourceLocation EYE_CONFIG_S2C = new ResourceLocation("reactions", "eye_config_s2c");
+    private static final ResourceLocation EYE_FOCUS_C2S = new ResourceLocation("reactions", "eye_focus_c2s");
+    private static final ResourceLocation EYE_FOCUS_S2C = new ResourceLocation("reactions", "eye_focus_s2c");
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
     private static final int MIN_EYE_FOCUS = -101;
@@ -36,13 +35,14 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
 
     @Override
     public void onInitialize() {
-        PayloadTypeRegistry.playC2S().register(EyeConfigC2SPayload.TYPE, EyeConfigC2SPayload.STREAM_CODEC);
-        PayloadTypeRegistry.playS2C().register(EyeConfigS2CPayload.TYPE, EyeConfigS2CPayload.STREAM_CODEC);
-        PayloadTypeRegistry.playC2S().register(EyeFocusC2SPayload.TYPE, EyeFocusC2SPayload.STREAM_CODEC);
-        PayloadTypeRegistry.playS2C().register(EyeFocusS2CPayload.TYPE, EyeFocusS2CPayload.STREAM_CODEC);
-
-        ServerPlayNetworking.registerGlobalReceiver(EyeConfigC2SPayload.TYPE, (payload, context) -> handleConfig(context.player(), payload.config()));
-        ServerPlayNetworking.registerGlobalReceiver(EyeFocusC2SPayload.TYPE, (payload, context) -> handleFocus(context.player(), payload.focus()));
+        ServerPlayNetworking.registerGlobalReceiver(EYE_CONFIG_C2S, (server, player, handler, buf, responseSender) -> {
+            EyeConfigC2SPayload payload = EyeConfigC2SPayload.read(buf);
+            server.execute(() -> handleConfig(player, payload.config()));
+        });
+        ServerPlayNetworking.registerGlobalReceiver(EYE_FOCUS_C2S, (server, player, handler, buf, responseSender) -> {
+            EyeFocusC2SPayload payload = EyeFocusC2SPayload.read(buf);
+            server.execute(() -> handleFocus(player, payload.focus()));
+        });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> PENDING_SYNC.put(handler.player.getUUID(), SERVER_SYNC_RETRY_TICKS));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> removeConfig(handler.player));
         ServerTickEvents.END_SERVER_TICK.register(ReactionsFabricServerRelay::retrySync);
@@ -131,7 +131,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     }
 
     private static boolean canSendConfig(ServerPlayer player) {
-        return ServerPlayNetworking.canSend(player, EyeConfigS2CPayload.TYPE) || CONFIGS.containsKey(player.getUUID());
+        return ServerPlayNetworking.canSend(player, EYE_CONFIG_S2C) || CONFIGS.containsKey(player.getUUID());
     }
 
     private static boolean send(ServerPlayer player, EyeConfigS2CPayload payload) {
@@ -139,10 +139,10 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
             return false;
         }
         try {
-            if (ServerPlayNetworking.canSend(player, EyeConfigS2CPayload.TYPE)) {
-                ServerPlayNetworking.send(player, payload);
+            if (ServerPlayNetworking.canSend(player, EYE_CONFIG_S2C)) {
+                ServerPlayNetworking.send(player, EYE_CONFIG_S2C, buffer(payload::write));
             } else {
-                player.connection.send(new ClientboundCustomPayloadPacket(payload));
+                player.connection.send(new ClientboundCustomPayloadPacket(EYE_CONFIG_S2C, buffer(payload::write)));
             }
             return true;
         } catch (RuntimeException ignored) {
@@ -155,10 +155,10 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
             return false;
         }
         try {
-            if (ServerPlayNetworking.canSend(player, EyeFocusS2CPayload.TYPE)) {
-                ServerPlayNetworking.send(player, payload);
+            if (ServerPlayNetworking.canSend(player, EYE_FOCUS_S2C)) {
+                ServerPlayNetworking.send(player, EYE_FOCUS_S2C, buffer(payload::write));
             } else {
-                player.connection.send(new ClientboundCustomPayloadPacket(payload));
+                player.connection.send(new ClientboundCustomPayloadPacket(EYE_FOCUS_S2C, buffer(payload::write)));
             }
             return true;
         } catch (RuntimeException ignored) {
@@ -167,10 +167,16 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     }
 
     private static boolean canSendFocus(ServerPlayer player) {
-        return ServerPlayNetworking.canSend(player, EyeFocusS2CPayload.TYPE) || CONFIGS.containsKey(player.getUUID());
+        return ServerPlayNetworking.canSend(player, EYE_FOCUS_S2C) || CONFIGS.containsKey(player.getUUID());
     }
 
-    private static void writeConfig(RegistryFriendlyByteBuf buf, EyeConfig config) {
+    private static FriendlyByteBuf buffer(Consumer<FriendlyByteBuf> writer) {
+        FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+        writer.accept(buf);
+        return buf;
+    }
+
+    private static void writeConfig(FriendlyByteBuf buf, EyeConfig config) {
         buf.writeUUID(config.playerId());
         buf.writeVarInt(config.entityId());
         for (int value : config.values()) {
@@ -178,7 +184,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         }
     }
 
-    private static EyeConfig readConfig(RegistryFriendlyByteBuf buf) {
+    private static EyeConfig readConfig(FriendlyByteBuf buf) {
         UUID playerId = buf.readUUID();
         int entityId = buf.readVarInt();
         int valueCount = buf.readableBytes() >= CONFIG_VALUE_COUNT ? CONFIG_VALUE_COUNT : LEGACY_CONFIG_VALUE_COUNT;
@@ -205,28 +211,17 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         }
     }
 
-    private record EyeConfigC2SPayload(EyeConfig config) implements CustomPacketPayload {
-        private static final Type<EyeConfigC2SPayload> TYPE = new Type<>(EYE_CONFIG_C2S);
-        private static final StreamCodec<RegistryFriendlyByteBuf, EyeConfigC2SPayload> STREAM_CODEC = StreamCodec.ofMember(EyeConfigC2SPayload::write, EyeConfigC2SPayload::read);
-
-        private static EyeConfigC2SPayload read(RegistryFriendlyByteBuf buf) {
+    private record EyeConfigC2SPayload(EyeConfig config) {
+        private static EyeConfigC2SPayload read(FriendlyByteBuf buf) {
             return new EyeConfigC2SPayload(readConfig(buf));
         }
 
-        private void write(RegistryFriendlyByteBuf buf) {
+        private void write(FriendlyByteBuf buf) {
             writeConfig(buf, config);
-        }
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
         }
     }
 
-    private record EyeConfigS2CPayload(int action, EyeConfig config, UUID playerId) implements CustomPacketPayload {
-        private static final Type<EyeConfigS2CPayload> TYPE = new Type<>(EYE_CONFIG_S2C);
-        private static final StreamCodec<RegistryFriendlyByteBuf, EyeConfigS2CPayload> STREAM_CODEC = StreamCodec.ofMember(EyeConfigS2CPayload::write, EyeConfigS2CPayload::read);
-
+    private record EyeConfigS2CPayload(int action, EyeConfig config, UUID playerId) {
         private static EyeConfigS2CPayload update(EyeConfig config) {
             return new EyeConfigS2CPayload(UPDATE, config, null);
         }
@@ -235,7 +230,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
             return new EyeConfigS2CPayload(REMOVE, null, playerId);
         }
 
-        private static EyeConfigS2CPayload read(RegistryFriendlyByteBuf buf) {
+        private static EyeConfigS2CPayload read(FriendlyByteBuf buf) {
             int action = buf.readUnsignedByte();
             if (action == UPDATE) {
                 return update(readConfig(buf));
@@ -243,7 +238,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
             return remove(buf.readUUID());
         }
 
-        private void write(RegistryFriendlyByteBuf buf) {
+        private void write(FriendlyByteBuf buf) {
             buf.writeByte(action);
             if (action == UPDATE) {
                 writeConfig(buf, config);
@@ -251,35 +246,19 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
                 buf.writeUUID(playerId);
             }
         }
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
-        }
     }
 
-    private record EyeFocusC2SPayload(int focus) implements CustomPacketPayload {
-        private static final Type<EyeFocusC2SPayload> TYPE = new Type<>(EYE_FOCUS_C2S);
-        private static final StreamCodec<RegistryFriendlyByteBuf, EyeFocusC2SPayload> STREAM_CODEC = StreamCodec.ofMember(EyeFocusC2SPayload::write, EyeFocusC2SPayload::read);
-
-        private static EyeFocusC2SPayload read(RegistryFriendlyByteBuf buf) {
+    private record EyeFocusC2SPayload(int focus) {
+        private static EyeFocusC2SPayload read(FriendlyByteBuf buf) {
             return new EyeFocusC2SPayload(buf.readByte());
         }
 
-        private void write(RegistryFriendlyByteBuf buf) {
+        private void write(FriendlyByteBuf buf) {
             buf.writeByte(clamp(focus, MIN_EYE_FOCUS, MAX_EYE_FOCUS));
-        }
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
         }
     }
 
-    private record EyeFocusS2CPayload(int action, EyeFocus focus, UUID playerId) implements CustomPacketPayload {
-        private static final Type<EyeFocusS2CPayload> TYPE = new Type<>(EYE_FOCUS_S2C);
-        private static final StreamCodec<RegistryFriendlyByteBuf, EyeFocusS2CPayload> STREAM_CODEC = StreamCodec.ofMember(EyeFocusS2CPayload::write, EyeFocusS2CPayload::read);
-
+    private record EyeFocusS2CPayload(int action, EyeFocus focus, UUID playerId) {
         private static EyeFocusS2CPayload update(EyeFocus focus) {
             return new EyeFocusS2CPayload(UPDATE, focus, null);
         }
@@ -288,7 +267,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
             return new EyeFocusS2CPayload(REMOVE, null, playerId);
         }
 
-        private static EyeFocusS2CPayload read(RegistryFriendlyByteBuf buf) {
+        private static EyeFocusS2CPayload read(FriendlyByteBuf buf) {
             int action = buf.readUnsignedByte();
             UUID playerId = buf.readUUID();
             if (action == UPDATE) {
@@ -297,7 +276,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
             return remove(playerId);
         }
 
-        private void write(RegistryFriendlyByteBuf buf) {
+        private void write(FriendlyByteBuf buf) {
             buf.writeByte(action);
             if (action == UPDATE) {
                 buf.writeUUID(focus.playerId());
@@ -306,11 +285,6 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
             } else {
                 buf.writeUUID(playerId);
             }
-        }
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
         }
     }
 }

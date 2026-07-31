@@ -880,12 +880,16 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static void submitHurtScleraEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, EyeSide side, boolean mirrored) {
         float extendedDstY1 = dstY1 - HURT_SCLERA_EXTENSION;
         int externalColumn = side == EyeSide.LEFT ? 0 : eyeWidth - 1;
-        int externalSourceX = mirrored ? skinX + eyeWidth - 1 - externalColumn : skinX + externalColumn;
-        float externalU1 = externalSourceX / SKIN_SIZE;
-        float externalV1 = skinY / SKIN_SIZE;
-        float externalU2 = (externalSourceX + 1) / SKIN_SIZE;
-        float externalV2 = (skinY + eyeHeight) / SKIN_SIZE;
-        collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, dstX1, extendedDstY1, dstX1 + eyeWidth, dstY1, externalU1, externalV1, externalU2, externalV2, light, overlay, NORMAL_COLOR));
+        if (eyeWidth == 2 && eyeHeight == 2) {
+            submitColumnScleraExtension(poseStack, collector, renderType, light, overlay, skinX, skinY, eyeWidth, dstX1, extendedDstY1, dstY1, mirrored);
+        } else {
+            int externalSourceX = mirrored ? skinX + eyeWidth - 1 - externalColumn : skinX + externalColumn;
+            float externalU1 = externalSourceX / SKIN_SIZE;
+            float externalV1 = skinY / SKIN_SIZE;
+            float externalU2 = (externalSourceX + 1) / SKIN_SIZE;
+            float externalV2 = (skinY + eyeHeight) / SKIN_SIZE;
+            collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, dstX1, extendedDstY1, dstX1 + eyeWidth, dstY1, externalU1, externalV1, externalU2, externalV2, light, overlay, NORMAL_COLOR));
+        }
 
         for (int column = 0; column < eyeWidth; column++) {
             if (column != externalColumn) {
@@ -901,7 +905,21 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             float v2 = (skinY + eyeHeight) / SKIN_SIZE;
             float finalDstX1 = columnDstX1;
             float finalDstX2 = columnDstX2;
-            collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, finalDstX1, extendedDstY1, finalDstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
+            float overlayDstY1 = eyeWidth == 2 && eyeHeight == 2 ? dstY1 : extendedDstY1;
+            collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, finalDstX1, overlayDstY1, finalDstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
+        }
+    }
+
+    private static void submitColumnScleraExtension(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyeWidth, float dstX1, float extendedDstY1, float dstY1, boolean mirrored) {
+        for (int column = 0; column < eyeWidth; column++) {
+            int sourceX = mirrored ? skinX + eyeWidth - 1 - column : skinX + column;
+            float columnDstX1 = dstX1 + column;
+            float columnDstX2 = columnDstX1 + 1.0F;
+            float u1 = sourceX / SKIN_SIZE;
+            float v1 = skinY / SKIN_SIZE;
+            float u2 = (sourceX + 1) / SKIN_SIZE;
+            float v2 = (skinY + 1) / SKIN_SIZE;
+            collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, columnDstX1, extendedDstY1, columnDstX2, dstY1, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
         }
     }
 

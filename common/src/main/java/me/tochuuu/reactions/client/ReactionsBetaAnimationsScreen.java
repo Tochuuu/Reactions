@@ -27,13 +27,7 @@ public final class ReactionsBetaAnimationsScreen extends Screen {
             rebuildWidgets();
         }).bounds(x, y, panelWidth, 20).build());
 
-        addRenderableWidget(Button.builder(cleanEyelidColorText(), button -> {
-            ReactionsClientConfig.get().cleanEyelidColor = !ReactionsClientConfig.get().cleanEyelidColor;
-            ReactionsClientConfig.save();
-            rebuildWidgets();
-        }).bounds(x, y + 24, panelWidth, 20).build());
-
-        int backY = Math.min(Math.max(y + 52, this.height - 30), this.height - 24);
+        int backY = Math.min(Math.max(y + 28, this.height - 30), this.height - 24);
         addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.back"), button -> onClose()).bounds(this.width / 2 - 45, backY, 90, 20).build());
     }
 
@@ -53,10 +47,6 @@ public final class ReactionsBetaAnimationsScreen extends Screen {
 
     private Component bowShootingAnimationText() {
         return Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.bow_squint"), onOff(ReactionsClientConfig.get().animateBowShooting));
-    }
-
-    private Component cleanEyelidColorText() {
-        return Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.eyelid_color"), onOff(ReactionsClientConfig.get().cleanEyelidColor));
     }
 
     private static Component onOff(boolean enabled) {

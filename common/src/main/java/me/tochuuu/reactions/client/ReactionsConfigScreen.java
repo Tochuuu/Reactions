@@ -20,12 +20,14 @@ public final class ReactionsConfigScreen extends Screen {
     private static final int FACE_PIXELS = 8;
     private static final int SKIN_SIZE = 64;
     private static final int BASE_FACE_SIZE = 160;
+    private static final int DENSE_FACE_SIZE = 128;
     private static final int MIN_FACE_SIZE = 72;
     private static final int COMPACT_FACE_SIZE = 48;
     private static final int PANEL_WIDTH = 224;
     private static final int FACE_PANEL_GAP = 18;
     private static final int GAP = 8;
     private static final int BUTTON_HEIGHT = 20;
+    private static final int DENSE_LAYOUT_HEIGHT = 300;
     private static final int SIZE_LIMIT_MESSAGE_TICKS = 60;
     private static final int MOUTH_PIXELS = 2;
 
@@ -63,7 +65,7 @@ public final class ReactionsConfigScreen extends Screen {
             return;
         }
 
-        initSideBySide(this.height < 260);
+        initSideBySide(this.height < DENSE_LAYOUT_HEIGHT);
     }
 
     private void initSideBySide(boolean denseLayout) {
@@ -77,8 +79,9 @@ public final class ReactionsConfigScreen extends Screen {
 
         layoutButtonHeight = buttonHeight;
         int availableFaceWidth = this.width - PANEL_WIDTH - FACE_PANEL_GAP - 28;
+        int maxFaceSize = denseLayout ? DENSE_FACE_SIZE : BASE_FACE_SIZE;
         int availableFaceHeight = this.height - (denseLayout ? 56 : 78);
-        faceSize = clamp(Math.min(Math.min(BASE_FACE_SIZE, availableFaceWidth), availableFaceHeight), MIN_FACE_SIZE, BASE_FACE_SIZE);
+        faceSize = clamp(Math.min(Math.min(maxFaceSize, availableFaceWidth), availableFaceHeight), MIN_FACE_SIZE, maxFaceSize);
         pixelSize = Math.max(1, faceSize / FACE_PIXELS);
         faceSize = pixelSize * FACE_PIXELS;
 
@@ -106,7 +109,8 @@ public final class ReactionsConfigScreen extends Screen {
         addToggle(panelX + half + GAP, y, half, otherAnimationText(), () -> ReactionsClientConfig.get().animateOthers = !ReactionsClientConfig.get().animateOthers, buttonHeight);
 
         y += buttonHeight + rowGap;
-        addToggle(panelX, y, panelWidth, mouthAnimationText(), () -> ReactionsClientConfig.get().animateMouth = !ReactionsClientConfig.get().animateMouth, buttonHeight);
+        addToggle(panelX, y, half, mouthAnimationText(true), () -> ReactionsClientConfig.get().animateMouth = !ReactionsClientConfig.get().animateMouth, buttonHeight);
+        addEyelidOptionsButton(panelX + half + GAP, y, half, buttonHeight);
 
         y += buttonHeight + rowGap;
         addModeButton(EditMode.LEFT_EYE, panelX, y, half, buttonHeight);
@@ -188,7 +192,8 @@ public final class ReactionsConfigScreen extends Screen {
         addToggle(panelX + half + GAP, y, half, otherAnimationText(), () -> ReactionsClientConfig.get().animateOthers = !ReactionsClientConfig.get().animateOthers, buttonHeight);
 
         y += buttonHeight + rowGap;
-        addToggle(panelX, y, panelWidth, mouthAnimationText(), () -> ReactionsClientConfig.get().animateMouth = !ReactionsClientConfig.get().animateMouth, buttonHeight);
+        addToggle(panelX, y, half, mouthAnimationText(true), () -> ReactionsClientConfig.get().animateMouth = !ReactionsClientConfig.get().animateMouth, buttonHeight);
+        addEyelidOptionsButton(panelX + half + GAP, y, half, buttonHeight);
 
         y += buttonHeight + sizeGap;
         sizeHeaderY = y - Math.max(4, sizeGap);
@@ -265,6 +270,14 @@ public final class ReactionsConfigScreen extends Screen {
         }).bounds(x, y, size, size).build());
     }
 
+    private void addEyelidOptionsButton(int x, int y, int width, int height) {
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.eyelid_options"), button -> {
+            if (this.minecraft != null) {
+                this.minecraft.setScreen(new ReactionsEyelidOptionsScreen(this));
+            }
+        }).bounds(x, y, width, height).build());
+    }
+
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ReactionsClientConfig config = ReactionsClientConfig.get();
@@ -285,7 +298,8 @@ public final class ReactionsConfigScreen extends Screen {
             graphics.drawString(this.font, Component.translatable("gui.reactions.eye_size_value", config.eyeWidth, config.eyeHeight), faceX, labelY, 0xFFA0A0A0);
         }
         int rowTextOffset = Math.max(2, (layoutButtonHeight - 9) / 2);
-        graphics.drawString(this.font, Component.translatable("gui.reactions.eye_size"), panelX, sizeHeaderY, 0xFFA0A0A0);
+        Component eyeSizeText = Component.translatable("gui.reactions.eye_size");
+        graphics.drawString(this.font, eyeSizeText, panelX + panelWidth / 2 - this.font.width(eyeSizeText) / 2, sizeHeaderY + 2, 0xFFA0A0A0);
         graphics.drawString(this.font, Component.translatable("gui.reactions.eye_width", config.eyeWidth), panelX, eyeWidthRowY + rowTextOffset, 0xFFFFFFFF);
         graphics.drawString(this.font, Component.translatable("gui.reactions.eye_height", config.eyeHeight), panelX, eyeHeightRowY + rowTextOffset, 0xFFFFFFFF);
 
@@ -424,7 +438,10 @@ public final class ReactionsConfigScreen extends Screen {
         return toggleText("gui.reactions.mouth", ReactionsClientConfig.get().showMouth);
     }
 
-    private Component mouthAnimationText() {
+    private Component mouthAnimationText(boolean shortText) {
+        if (shortText) {
+            return Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.mouth_anims.short"), onOffShort(ReactionsClientConfig.get().animateMouth));
+        }
         return toggleText("gui.reactions.mouth_anims", ReactionsClientConfig.get().animateMouth);
     }
 
@@ -439,6 +456,10 @@ public final class ReactionsConfigScreen extends Screen {
 
     private static Component onOff(boolean enabled) {
         return Component.translatable(enabled ? "gui.reactions.on" : "gui.reactions.off");
+    }
+
+    private static Component onOffShort(boolean enabled) {
+        return Component.translatable(enabled ? "gui.reactions.on.short" : "gui.reactions.off.short");
     }
 
     private static int clamp(int value, int min, int max) {

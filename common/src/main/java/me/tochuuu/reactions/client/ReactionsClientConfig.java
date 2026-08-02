@@ -31,6 +31,8 @@ public final class ReactionsClientConfig {
     public boolean animateBowShooting = false;
     @SerializedName(value = "cleanEyelidColor", alternate = "naturalEyeColors")
     public boolean cleanEyelidColor = false;
+    public boolean texturedEyelids = true;
+    public int eyelidTintIntensity = 50;
     public boolean showMouth = true;
     public boolean animateMouth = true;
     public int leftEyeX = 9;
@@ -148,6 +150,7 @@ public final class ReactionsClientConfig {
         rightMouthY = clamp(rightMouthY, 8, 15);
         eyelidColorX = clamp(eyelidColorX, 0, 63);
         eyelidColorY = clamp(eyelidColorY, 0, 63);
+        eyelidTintIntensity = clamp(eyelidTintIntensity, 0, 100);
         movementPixels = clamp(movementPixels, 0, 4);
         blinkIntervalTicks = clamp(blinkIntervalTicks, 20, 400);
         blinkDurationTicks = clamp(blinkDurationTicks, 1, 20);

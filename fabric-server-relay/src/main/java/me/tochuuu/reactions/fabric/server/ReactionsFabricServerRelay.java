@@ -28,6 +28,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     private static final int MAX_EYE_FOCUS = 101;
     private static final int LEGACY_CONFIG_VALUE_COUNT = 8;
     private static final int CONFIG_VALUE_COUNT = 13;
+    private static final int EYELID_STYLE_CONFIG_VALUE_COUNT = 16;
     private static final int SERVER_SYNC_RETRY_TICKS = 20 * 30;
     private static final Map<UUID, EyeConfig> CONFIGS = new HashMap<>();
     private static final Map<UUID, EyeFocus> FOCUSES = new HashMap<>();
@@ -187,7 +188,8 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     private static EyeConfig readConfig(FriendlyByteBuf buf) {
         UUID playerId = buf.readUUID();
         int entityId = buf.readVarInt();
-        int valueCount = buf.readableBytes() >= CONFIG_VALUE_COUNT ? CONFIG_VALUE_COUNT : LEGACY_CONFIG_VALUE_COUNT;
+        int readableValues = buf.readableBytes();
+        int valueCount = readableValues >= EYELID_STYLE_CONFIG_VALUE_COUNT ? EYELID_STYLE_CONFIG_VALUE_COUNT : readableValues >= CONFIG_VALUE_COUNT ? CONFIG_VALUE_COUNT : LEGACY_CONFIG_VALUE_COUNT;
         int[] values = new int[valueCount];
         for (int i = 0; i < values.length; i++) {
             values[i] = buf.readUnsignedByte();

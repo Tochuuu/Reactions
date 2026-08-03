@@ -17,7 +17,10 @@ public record RemoteEyeConfig(
     int eyelidColorX,
     int eyelidColorY,
     int eyeWidth,
-    int eyeHeight
+    int eyeHeight,
+    boolean cleanEyelidColor,
+    boolean texturedEyelids,
+    int eyelidTintIntensity
 ) {
     public RemoteEyeConfig {
         eyeWidth = ReactionsClientConfig.clampEyeWidth(eyeWidth);
@@ -25,5 +28,6 @@ public record RemoteEyeConfig(
         if (ReactionsClientConfig.isBlockedEyeSize(eyeWidth, eyeHeight)) {
             eyeHeight = 2;
         }
+        eyelidTintIntensity = ReactionsClientConfig.clampEyelidTintIntensity(eyelidTintIntensity);
     }
 }

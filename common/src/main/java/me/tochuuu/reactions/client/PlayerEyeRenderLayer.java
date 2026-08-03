@@ -710,7 +710,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             submitEyePiece(poseStack, collector, renderType, light, overlay, skinX + scleraSourceColumn, sourceY, 1.0F, sourceHeight, dstX1 + column, dstY1, dstX1 + column + 1.0F, dstY2, NORMAL_COLOR);
         }
 
-        int pupilWidth = pupilWidth(eyeWidth, eyeHeight);
+        int pupilWidth = pupilWidth(eyeWidth, eyeHeight, eyeLook);
         int pupilColumn = pupilDestinationColumn(side, eyeLook, eyeWidth, eyeHeight, pupilWidth);
         int pupilSourceColumn = internalPupilColumn(side, eyeWidth, eyeHeight, pupilWidth);
         float rowHeight = dstY2 - dstY1;
@@ -818,8 +818,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return alpha | red << 16 | green << 8 | blue;
     }
 
-    private static int pupilWidth(int eyeWidth, int eyeHeight) {
+    private static int pupilWidth(int eyeWidth, int eyeHeight, int eyeLook) {
         if (eyeWidth == 3 && eyeHeight == 1) {
+            return 1;
+        }
+        if (eyeWidth == 3 && eyeHeight == 2 && eyeLook != 0) {
             return 1;
         }
         return Math.max(1, eyeWidth - 1);
@@ -828,6 +831,9 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static int internalPupilColumn(EyeSide side, int eyeWidth, int eyeHeight, int pupilWidth) {
         if (eyeWidth == 3 && eyeHeight == 1) {
             return 1;
+        }
+        if (eyeWidth == 3 && eyeHeight == 2 && pupilWidth == 1) {
+            return side == EyeSide.LEFT ? eyeWidth - 1 : 0;
         }
         return side == EyeSide.LEFT ? eyeWidth - pupilWidth : 0;
     }

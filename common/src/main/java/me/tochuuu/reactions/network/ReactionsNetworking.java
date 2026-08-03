@@ -475,6 +475,9 @@ public final class ReactionsNetworking {
         buf.writeByte(config.eyelidColorY());
         buf.writeByte(config.eyeWidth());
         buf.writeByte(config.eyeHeight());
+        buf.writeBoolean(config.cleanEyelidColor());
+        buf.writeBoolean(config.texturedEyelids());
+        buf.writeByte(config.eyelidTintIntensity());
     }
 
     private static RemoteEyeConfig readUpdateBody(RegistryFriendlyByteBuf buf) {
@@ -500,8 +503,29 @@ public final class ReactionsNetworking {
                 buf.readUnsignedByte(),
                 buf.readUnsignedByte(),
                 buf.readUnsignedByte(),
-                buf.readUnsignedByte()
+                buf.readUnsignedByte(),
+                ReactionsClientConfig.DEFAULT_CLEAN_EYELID_COLOR,
+                ReactionsClientConfig.DEFAULT_TEXTURED_EYELIDS,
+                ReactionsClientConfig.DEFAULT_EYELID_TINT_INTENSITY
             );
+        }
+
+        boolean mouthEnabled = buf.readBoolean();
+        int leftMouthX = buf.readUnsignedByte();
+        int leftMouthY = buf.readUnsignedByte();
+        int rightMouthX = buf.readUnsignedByte();
+        int rightMouthY = buf.readUnsignedByte();
+        int eyelidColorX = buf.readUnsignedByte();
+        int eyelidColorY = buf.readUnsignedByte();
+        int eyeWidth = buf.readUnsignedByte();
+        int eyeHeight = buf.readUnsignedByte();
+        boolean cleanEyelidColor = ReactionsClientConfig.DEFAULT_CLEAN_EYELID_COLOR;
+        boolean texturedEyelids = ReactionsClientConfig.DEFAULT_TEXTURED_EYELIDS;
+        int eyelidTintIntensity = ReactionsClientConfig.DEFAULT_EYELID_TINT_INTENSITY;
+        if (buf.readableBytes() >= 3) {
+            cleanEyelidColor = buf.readBoolean();
+            texturedEyelids = buf.readBoolean();
+            eyelidTintIntensity = buf.readUnsignedByte();
         }
 
         return new RemoteEyeConfig(
@@ -511,15 +535,18 @@ public final class ReactionsNetworking {
             leftEyeY,
             rightEyeX,
             rightEyeY,
-            buf.readBoolean(),
-            buf.readUnsignedByte(),
-            buf.readUnsignedByte(),
-            buf.readUnsignedByte(),
-            buf.readUnsignedByte(),
-            buf.readUnsignedByte(),
-            buf.readUnsignedByte(),
-            buf.readUnsignedByte(),
-            buf.readUnsignedByte()
+            mouthEnabled,
+            leftMouthX,
+            leftMouthY,
+            rightMouthX,
+            rightMouthY,
+            eyelidColorX,
+            eyelidColorY,
+            eyeWidth,
+            eyeHeight,
+            cleanEyelidColor,
+            texturedEyelids,
+            eyelidTintIntensity
         );
     }
 
@@ -540,7 +567,10 @@ public final class ReactionsNetworking {
             config.eyelidColorX,
             config.eyelidColorY,
             config.eyeWidth,
-            config.eyeHeight
+            config.eyeHeight,
+            config.cleanEyelidColor,
+            config.texturedEyelids,
+            config.eyelidTintIntensity
         );
     }
 
@@ -568,7 +598,10 @@ public final class ReactionsNetworking {
             config.eyelidColorX(),
             config.eyelidColorY(),
             config.eyeWidth(),
-            config.eyeHeight()
+            config.eyeHeight(),
+            config.cleanEyelidColor(),
+            config.texturedEyelids(),
+            config.eyelidTintIntensity()
         );
     }
 

@@ -23,6 +23,9 @@ public final class ReactionsClientConfig {
     public static final int MAX_EYE_WIDTH = 3;
     public static final int MIN_EYE_HEIGHT = 1;
     public static final int MAX_EYE_HEIGHT = 3;
+    public static final boolean DEFAULT_CLEAN_EYELID_COLOR = false;
+    public static final boolean DEFAULT_TEXTURED_EYELIDS = true;
+    public static final int DEFAULT_EYELID_TINT_INTENSITY = 50;
     private static ReactionsClientConfig instance;
 
     public boolean enabled = true;
@@ -30,9 +33,9 @@ public final class ReactionsClientConfig {
     public boolean animateOthers = true;
     public boolean animateBowShooting = false;
     @SerializedName(value = "cleanEyelidColor", alternate = "naturalEyeColors")
-    public boolean cleanEyelidColor = false;
-    public boolean texturedEyelids = true;
-    public int eyelidTintIntensity = 50;
+    public boolean cleanEyelidColor = DEFAULT_CLEAN_EYELID_COLOR;
+    public boolean texturedEyelids = DEFAULT_TEXTURED_EYELIDS;
+    public int eyelidTintIntensity = DEFAULT_EYELID_TINT_INTENSITY;
     public boolean showMouth = true;
     public boolean animateMouth = true;
     public int leftEyeX = 9;
@@ -150,7 +153,7 @@ public final class ReactionsClientConfig {
         rightMouthY = clamp(rightMouthY, 8, 15);
         eyelidColorX = clamp(eyelidColorX, 0, 63);
         eyelidColorY = clamp(eyelidColorY, 0, 63);
-        eyelidTintIntensity = clamp(eyelidTintIntensity, 0, 100);
+        eyelidTintIntensity = clampEyelidTintIntensity(eyelidTintIntensity);
         movementPixels = clamp(movementPixels, 0, 4);
         blinkIntervalTicks = clamp(blinkIntervalTicks, 20, 400);
         blinkDurationTicks = clamp(blinkDurationTicks, 1, 20);
@@ -173,6 +176,10 @@ public final class ReactionsClientConfig {
         return eyeWidth >= MIN_EYE_WIDTH && eyeWidth <= MAX_EYE_WIDTH
             && eyeHeight >= MIN_EYE_HEIGHT && eyeHeight <= MAX_EYE_HEIGHT
             && !isBlockedEyeSize(eyeWidth, eyeHeight);
+    }
+
+    public static int clampEyelidTintIntensity(int eyelidTintIntensity) {
+        return clamp(eyelidTintIntensity, 0, 100);
     }
 
     private static int clamp(int value, int min, int max) {

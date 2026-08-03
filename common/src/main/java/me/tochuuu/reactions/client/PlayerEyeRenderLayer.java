@@ -107,6 +107,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             return;
         }
         EyeSettings eyes = isSelf ? EyeSettings.local(config) : remoteConfig != null ? EyeSettings.remote(remoteConfig) : useDefaultOfflineEyes ? EyeSettings.defaults() : EyeSettings.override(playerOverride);
+        EyelidStyle eyelidStyle = isSelf || remoteConfig == null ? EyelidStyle.local(config) : EyelidStyle.remote(remoteConfig);
 
         RenderType renderType = renderType(texture);
         boolean animationsEnabled = isSelf ? config.animateSelf : config.animateOthers;
@@ -121,7 +122,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         HumanoidArm bowArm = bowUseArm(player);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(player, bowArm);
         DamageEyeReaction damageReaction = animationsEnabled ? damageReaction(player.getId(), player.hurtTime > 0, ageInTicks) : DamageEyeReaction.NONE;
-        boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallReaction == FallEyeReaction.SURPRISE;
+        boolean fallingSurprise = fallReaction == FallEyeReaction.SURPRISE;
+        boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallingSurprise;
         MouthUseAnimation mouthUseAnimation = mouthAnimationsEnabled ? mouthUseAnimation(player) : MouthUseAnimation.NONE;
         EyeExpression leftEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, bowSquint);
         EyeExpression rightEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, bowSquint);
@@ -134,11 +136,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         poseStack.pushPose();
         translateToFacePose(poseStack);
         VertexConsumer consumer = bufferSource.getBuffer(renderType);
-        boolean eyelidTintEnabled = !config.cleanEyelidColor && config.eyelidTintIntensity > 0;
+        boolean eyelidTintEnabled = !eyelidStyle.cleanEyelidColor && eyelidStyle.eyelidTintIntensity > 0;
         int overlay = eyelidTintEnabled ? LivingEntityRenderer.getOverlayCoords(player, 0.0F) : OverlayTexture.NO_OVERLAY;
-        int eyelidColor = eyelidColor(config.cleanEyelidColor, config.eyelidTintIntensity, eyes.eyeHeight);
-        submitEye(poseStack, consumer, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, eyelidColor, config.texturedEyelids);
-        submitEye(poseStack, consumer, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, eyelidColor, config.texturedEyelids);
+        int eyelidColor = eyelidColor(eyelidStyle.cleanEyelidColor, eyelidStyle.eyelidTintIntensity, eyes.eyeHeight);
+        submitEye(poseStack, consumer, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
+        submitEye(poseStack, consumer, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
         if (mouthAnimationsEnabled && AdvancementMouthReaction.active(player.getId())) {
             submitAdvancementMouth(poseStack, consumer, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
@@ -181,22 +183,21 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         model.head.translateAndRotate(poseStack);
     }
 
-    private static void submitEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, int eyeLook, EyeSide side, boolean hurtSclera, int eyelidColor, boolean texturedEyelids) {
+    private static void submitEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, EyeExpression expression, int eyeLook, EyeSide side, boolean hurtSclera, boolean fallingSurprise, int eyelidColor, boolean texturedEyelids) {
         int clampedSkinX = clamp(skinX, 0, (int) SKIN_SIZE - eyeWidth);
         int clampedSkinY = clamp(skinY, 0, (int) SKIN_SIZE - eyeHeight);
-        int clampedEyelidSkinX = clamp(eyelidColorX, 0, (int) SKIN_SIZE - 1);
-        int clampedEyelidSkinY = clamp(eyelidColorY, 0, (int) SKIN_SIZE - 1);
         float dstX1 = skinX - HEAD_FRONT_U - 4.0F;
         float dstY1 = skinY - HEAD_FRONT_V - 8.0F;
         float dstY2 = dstY1 + eyeHeight;
+        float dstX2 = dstX1 + eyeWidth;
 
         if (expression == EyeExpression.CLOSED) {
-            submitEyelidTexture(poseStack, consumer, light, overlay, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, dstX1, dstY1, dstX1 + eyeWidth, dstY2, eyelidColor, texturedEyelids);
+            submitEyelidTexture(poseStack, consumer, light, overlay, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, dstX1, dstY1, dstX2, dstY2, eyelidColor, texturedEyelids);
             return;
         }
 
-        if (expression == EyeExpression.SQUINT) {
-            submitSquintEye(poseStack, consumer, light, overlay, clampedSkinX, clampedSkinY, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, eyeLook, side, eyelidColor, texturedEyelids);
+        if (expression == EyeExpression.OPEN && shouldExtendSclera(eyeWidth, eyeHeight, fallingSurprise)) {
+            submitHurtScleraEye(poseStack, consumer, light, overlay, clampedSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, side, true, shouldMirrorEyeColumns(eyeLook, side));
             return;
         }
 
@@ -205,11 +206,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             return;
         }
 
-        boolean mirrored = shouldMirrorEyeColumns(eyeLook, side);
-        if (expression == EyeExpression.OPEN && shouldExtendSclera(eyeWidth, eyeHeight, hurtSclera)) {
-            submitHurtScleraEye(poseStack, consumer, light, overlay, clampedSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, side, mirrored);
+        if (expression == EyeExpression.SQUINT) {
+            submitSquintEye(poseStack, consumer, light, overlay, clampedSkinX, clampedSkinY, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, eyeLook, side, eyelidColor, texturedEyelids);
             return;
         }
+
+        if (expression == EyeExpression.OPEN && shouldExtendSclera(eyeWidth, eyeHeight, hurtSclera)) {
+            submitHurtScleraEye(poseStack, consumer, light, overlay, clampedSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, side, false, false);
+            return;
+        }
+
+        boolean mirrored = shouldMirrorEyeColumns(eyeLook, side);
 
         if (mirrored && expression != EyeExpression.CLOSED) {
             for (int column = 0; column < eyeWidth; column++) {
@@ -227,24 +234,14 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         }
 
         int sourceX = clampedSkinX;
-        int sourceY;
-
-        if (expression == EyeExpression.CLOSED) {
-            sourceX = clampedEyelidSkinX;
-            sourceY = clampedEyelidSkinY;
-        } else {
-            sourceY = clampedSkinY;
-        }
-
-        float dstX2 = dstX1 + eyeWidth;
+        int sourceY = clampedSkinY;
 
         float u1 = sourceX / SKIN_SIZE;
         float v1 = sourceY / SKIN_SIZE;
-        float u2 = (sourceX + (expression == EyeExpression.CLOSED ? 1 : eyeWidth)) / SKIN_SIZE;
-        float v2 = (sourceY + (expression == EyeExpression.CLOSED ? 1 : eyeHeight)) / SKIN_SIZE;
+        float u2 = (sourceX + eyeWidth) / SKIN_SIZE;
+        float v2 = (sourceY + eyeHeight) / SKIN_SIZE;
 
-        int color = expression == EyeExpression.CLOSED ? EYELID_DARKEN_COLOR : NORMAL_COLOR;
-        quad(consumer, poseStack.last(), dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color);
+        quad(consumer, poseStack.last(), dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
     }
 
     private record EyeSettings(int leftEyeX, int leftEyeY, int rightEyeX, int rightEyeY, boolean mouthEnabled, int leftMouthX, int leftMouthY, int rightMouthX, int rightMouthY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight) {
@@ -262,6 +259,16 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
 
         private static EyeSettings defaults() {
             return DEFAULT_EYES;
+        }
+    }
+
+    private record EyelidStyle(boolean cleanEyelidColor, boolean texturedEyelids, int eyelidTintIntensity) {
+        private static EyelidStyle local(ReactionsClientConfig config) {
+            return new EyelidStyle(config.cleanEyelidColor, config.texturedEyelids, config.eyelidTintIntensity);
+        }
+
+        private static EyelidStyle remote(RemoteEyeConfig config) {
+            return new EyelidStyle(config.cleanEyelidColor(), config.texturedEyelids(), config.eyelidTintIntensity());
         }
     }
 
@@ -911,19 +918,20 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         return hurtSclera && eyeWidth == 2 && (eyeHeight == 1 || eyeHeight == 2);
     }
 
-    private static void submitHurtScleraEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, EyeSide side, boolean mirrored) {
+    private static void submitHurtScleraEye(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, EyeSide side, boolean surprise, boolean mirrored) {
         float extendedDstY1 = dstY1 - HURT_SCLERA_EXTENSION;
         int externalColumn = side == EyeSide.LEFT ? 0 : eyeWidth - 1;
-        if (eyeWidth == 2 && eyeHeight == 2) {
-            submitColumnScleraExtension(poseStack, consumer, light, overlay, skinX, skinY, eyeWidth, dstX1, extendedDstY1, dstY1, mirrored);
-        } else {
-            int externalSourceX = mirrored ? skinX + eyeWidth - 1 - externalColumn : skinX + externalColumn;
-            float externalU1 = externalSourceX / SKIN_SIZE;
-            float externalV1 = skinY / SKIN_SIZE;
-            float externalU2 = (externalSourceX + 1) / SKIN_SIZE;
-            float externalV2 = (skinY + eyeHeight) / SKIN_SIZE;
-            quad(consumer, poseStack.last(), dstX1, extendedDstY1, dstX1 + eyeWidth, dstY1, externalU1, externalV1, externalU2, externalV2, light, overlay, NORMAL_COLOR);
+        int externalSourceX = mirrored ? skinX + eyeWidth - 1 - externalColumn : skinX + externalColumn;
+        if (surprise && eyeWidth == 2 && eyeHeight == 2) {
+            submitEyePiece(poseStack, consumer, light, overlay, externalSourceX, skinY, 1.0F, 1.0F, dstX1, extendedDstY1, dstX1 + eyeWidth, dstY1, NORMAL_COLOR);
+            return;
         }
+
+        float externalU1 = externalSourceX / SKIN_SIZE;
+        float externalV1 = skinY / SKIN_SIZE;
+        float externalU2 = (externalSourceX + 1) / SKIN_SIZE;
+        float externalV2 = (skinY + eyeHeight) / SKIN_SIZE;
+        quad(consumer, poseStack.last(), dstX1, extendedDstY1, dstX1 + eyeWidth, dstY1, externalU1, externalV1, externalU2, externalV2, light, overlay, NORMAL_COLOR);
 
         for (int column = 0; column < eyeWidth; column++) {
             if (column != externalColumn) {
@@ -941,19 +949,6 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             float finalDstX2 = columnDstX2;
             float overlayDstY1 = eyeWidth == 2 && eyeHeight == 2 ? dstY1 : extendedDstY1;
             quad(consumer, poseStack.last(), finalDstX1, overlayDstY1, finalDstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
-        }
-    }
-
-    private static void submitColumnScleraExtension(PoseStack poseStack, VertexConsumer consumer, int light, int overlay, int skinX, int skinY, int eyeWidth, float dstX1, float extendedDstY1, float dstY1, boolean mirrored) {
-        for (int column = 0; column < eyeWidth; column++) {
-            int sourceX = mirrored ? skinX + eyeWidth - 1 - column : skinX + column;
-            float columnDstX1 = dstX1 + column;
-            float columnDstX2 = columnDstX1 + 1.0F;
-            float u1 = sourceX / SKIN_SIZE;
-            float v1 = skinY / SKIN_SIZE;
-            float u2 = (sourceX + 1) / SKIN_SIZE;
-            float v2 = (skinY + 1) / SKIN_SIZE;
-            quad(consumer, poseStack.last(), columnDstX1, extendedDstY1, columnDstX2, dstY1, u1, v1, u2, v2, light, overlay, NORMAL_COLOR);
         }
     }
 

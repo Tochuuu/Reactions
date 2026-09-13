@@ -32,7 +32,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     private static final int MIN_EYE_FOCUS = -101;
     private static final int MAX_EYE_FOCUS = 101;
     private static final int MIN_MANUAL_EYE = 0;
-    private static final int MAX_MANUAL_EYE = 4;
+    private static final int MAX_MANUAL_EYE = 11;
     private static final int LEGACY_CONFIG_VALUE_COUNT = 8;
     private static final int CONFIG_VALUE_COUNT = 13;
     private static final int EYELID_STYLE_CONFIG_VALUE_COUNT = 16;

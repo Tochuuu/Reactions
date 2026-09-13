@@ -64,6 +64,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final float LOOK_DOWN_SCLERA_BOTTOM_COVERAGE = 0.16F;
     private static final float BLOCK_FOCUS_EYE_THRESHOLD = 0.25F;
     private static final float MOUNTED_BACK_LOOK_THRESHOLD = 75.0F;
+    private static final int FULL_BRIGHT_LIGHT = 0x00F000F0;
     private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, false, 11, 14, 12, 14, 10, 11, 2, 1, ReactionsClientConfig.DisabledEye.NONE, ReactionsClientConfig.EyeSkinLayer.BASE);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> DAMAGE_REACTIONS = new java.util.HashMap<>();
@@ -100,6 +101,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         EyelidStyle eyelidStyle = isSelf || remoteConfig == null ? EyelidStyle.local(config) : EyelidStyle.remote(remoteConfig);
 
         RenderType renderType = renderType(texture);
+        RenderType emissiveRenderType = emissiveRenderType(texture);
         boolean animationsEnabled = isSelf ? config.animateSelf : config.animateOthers;
         boolean mouthAnimationsEnabled = animationsEnabled && config.animateMouth;
         boolean sleeping = state.hasPose(Pose.SLEEPING);
@@ -108,6 +110,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             ? ReactionsClient.manualEyeControl()
             : ReactionsClient.ManualEyeControl.fromNetwork(ReactionsNetworking.remoteManualEyeControl(state.id));
         boolean manualEyeActive = !sleeping && manualEyeControl.active();
+        boolean manualWideEyes = manualEyeActive && manualEyeControl.surprisesEyes();
         boolean blinking = !manualEyeActive && !sleeping && animationsEnabled && (isBlinking(state, config) || actionState.landingBlink());
         EyeLook blockFocusEye = animationsEnabled && !blinking ? blockFocusEye(state.id, isSelf) : EyeLook.CENTER;
         EyeLook mountedEyeLook = animationsEnabled && !blinking ? mountedBackLook(actionState) : EyeLook.CENTER;
@@ -116,7 +119,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         HumanoidArm bowArm = bowUseArm(state);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(state, bowArm);
         DamageEyeReaction damageReaction = animationsEnabled ? damageReaction(state.id, state.hasRedOverlay, state.ageInTicks) : DamageEyeReaction.NONE;
-        boolean fallingSurprise = actionState.fallingSurprise();
+        boolean fallingSurprise = actionState.fallingSurprise() || manualWideEyes;
         boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallingSurprise;
         EyeExpression leftEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, bowSquint);
         EyeExpression rightEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, bowSquint);
@@ -125,14 +128,23 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             rightEye = EyeExpression.CLOSED;
         }
         if (manualEyeActive) {
-            EyeExpression manualExpression = manualEyeControl.closesEyes() ? EyeExpression.CLOSED : EyeExpression.SQUINT;
-            if (manualEyeControl.affectsLeftEye()) {
+            EyeExpression manualExpression = manualExpression(manualEyeControl);
+            EyeLook manualLook = manualEyeLook(manualEyeControl);
+            boolean manualApplied = false;
+            if (manualExpression != null && manualEyeControl.affectsLeftEye() && spyglassArm != HumanoidArm.LEFT) {
                 leftEye = manualExpression;
+                manualApplied = true;
             }
-            if (manualEyeControl.affectsRightEye()) {
+            if (manualExpression != null && manualEyeControl.affectsRightEye() && spyglassArm != HumanoidArm.RIGHT) {
                 rightEye = manualExpression;
+                manualApplied = true;
             }
-            eyeLook = EyeLook.CENTER;
+            if (manualLook != EyeLook.CENTER) {
+                eyeLook = manualLook;
+                manualApplied = true;
+            } else if (manualApplied || manualEyeControl.surprisesEyes()) {
+                eyeLook = EyeLook.CENTER;
+            }
         }
 
         poseStack.pushPose();
@@ -149,6 +161,14 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         }
         if (!eyes.disabledEye.disablesRightEye()) {
             submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.eyeSkinLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
+        }
+        if (emissiveRenderType != null) {
+            if (!eyes.disabledEye.disablesLeftEye()) {
+                submitEmissiveEye(poseStack, collector, emissiveRenderType, eyes.leftEyeX, eyes.leftEyeY, eyes.eyeWidth, eyes.eyeHeight, eyes.eyeSkinLayer, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, fallingSurprise);
+            }
+            if (!eyes.disabledEye.disablesRightEye()) {
+                submitEmissiveEye(poseStack, collector, emissiveRenderType, eyes.rightEyeX, eyes.rightEyeY, eyes.eyeWidth, eyes.eyeHeight, eyes.eyeSkinLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, fallingSurprise);
+            }
         }
         if (mouthAnimationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
@@ -205,13 +225,18 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             return;
         }
 
+        if (expression == EyeExpression.OPEN && shouldExtendSclera(eyeWidth, eyeHeight, fallingSurprise) && canUseBlockEyeAnimation(eyeWidth, eyeHeight)) {
+            submitBlockEye(poseStack, collector, renderType, light, overlay, sourceSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, side, eyeLook, true, true);
+            return;
+        }
+
         if (expression == EyeExpression.OPEN && shouldExtendSclera(eyeWidth, eyeHeight, fallingSurprise)) {
             submitHurtScleraEye(poseStack, collector, renderType, light, overlay, sourceSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, side, true, shouldMirrorEyeColumns(eyeLook, side));
             return;
         }
 
         if (expression == EyeExpression.OPEN && canUseBlockEyeAnimation(eyeWidth, eyeHeight)) {
-            submitBlockEye(poseStack, collector, renderType, light, overlay, sourceSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, side, eyeLook, hurtSclera);
+            submitBlockEye(poseStack, collector, renderType, light, overlay, sourceSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, side, eyeLook, hurtSclera, false);
             return;
         }
 
@@ -250,6 +275,66 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float v2 = (sourceY + eyeHeight) / SKIN_SIZE;
 
         collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
+    }
+
+    private static void submitEmissiveEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int skinX, int skinY, int eyeWidth, int eyeHeight, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, EyeExpression expression, EyeLook eyeLook, EyeSide side, boolean hurtSclera, boolean fallingSurprise) {
+        if (expression == EyeExpression.CLOSED) {
+            return;
+        }
+
+        int clampedSkinX = clamp(skinX, (int) HEAD_FRONT_U, (int) (HEAD_FRONT_U + 8.0F) - eyeWidth);
+        int clampedSkinY = clamp(skinY, (int) HEAD_FRONT_V, (int) (HEAD_FRONT_V + 8.0F) - eyeHeight);
+        int sourceSkinX = ReactionsClientConfig.eyeSourceX(clampedSkinX, eyeSkinLayer);
+        float dstX1 = clampedSkinX - HEAD_FRONT_U - 4.0F;
+        float dstY1 = clampedSkinY - HEAD_FRONT_V - 8.0F;
+        float dstY2 = dstY1 + eyeHeight;
+        float dstX2 = dstX1 + eyeWidth;
+
+        if (expression == EyeExpression.OPEN && shouldExtendSclera(eyeWidth, eyeHeight, fallingSurprise) && canUseBlockEyeAnimation(eyeWidth, eyeHeight)) {
+            submitBlockEye(poseStack, collector, renderType, FULL_BRIGHT_LIGHT, OverlayTexture.NO_OVERLAY, sourceSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, side, eyeLook, true, true);
+            return;
+        }
+
+        if (expression == EyeExpression.OPEN && shouldExtendSclera(eyeWidth, eyeHeight, fallingSurprise)) {
+            submitHurtScleraEye(poseStack, collector, renderType, FULL_BRIGHT_LIGHT, OverlayTexture.NO_OVERLAY, sourceSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, side, true, shouldMirrorEyeColumns(eyeLook, side));
+            return;
+        }
+
+        if (expression == EyeExpression.OPEN && canUseBlockEyeAnimation(eyeWidth, eyeHeight)) {
+            submitBlockEye(poseStack, collector, renderType, FULL_BRIGHT_LIGHT, OverlayTexture.NO_OVERLAY, sourceSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, side, eyeLook, hurtSclera, false);
+            return;
+        }
+
+        if (expression == EyeExpression.SQUINT) {
+            submitSquintVisibleEye(poseStack, collector, renderType, FULL_BRIGHT_LIGHT, OverlayTexture.NO_OVERLAY, sourceSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, eyeLook, side);
+            return;
+        }
+
+        if (expression == EyeExpression.OPEN && shouldExtendSclera(eyeWidth, eyeHeight, hurtSclera)) {
+            submitHurtScleraEye(poseStack, collector, renderType, FULL_BRIGHT_LIGHT, OverlayTexture.NO_OVERLAY, sourceSkinX, clampedSkinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, side, false, false);
+            return;
+        }
+
+        boolean mirrored = shouldMirrorEyeColumns(eyeLook, side);
+        if (mirrored) {
+            for (int column = 0; column < eyeWidth; column++) {
+                int sourceX = sourceSkinX + eyeWidth - 1 - column;
+                float columnDstX1 = dstX1 + column;
+                float columnDstX2 = columnDstX1 + 1.0F;
+                float u1 = sourceX / SKIN_SIZE;
+                float v1 = clampedSkinY / SKIN_SIZE;
+                float u2 = (sourceX + 1) / SKIN_SIZE;
+                float v2 = (clampedSkinY + eyeHeight) / SKIN_SIZE;
+                collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, columnDstX1, dstY1, columnDstX2, dstY2, u1, v1, u2, v2, FULL_BRIGHT_LIGHT, OverlayTexture.NO_OVERLAY, NORMAL_COLOR));
+            }
+            return;
+        }
+
+        float u1 = sourceSkinX / SKIN_SIZE;
+        float v1 = clampedSkinY / SKIN_SIZE;
+        float u2 = (sourceSkinX + eyeWidth) / SKIN_SIZE;
+        float v2 = (clampedSkinY + eyeHeight) / SKIN_SIZE;
+        collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, FULL_BRIGHT_LIGHT, OverlayTexture.NO_OVERLAY, NORMAL_COLOR));
     }
 
     private static void submitEyebrowAboveEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyebrowWidth, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, float dstYOffset) {
@@ -779,13 +864,14 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return eyeWidth == 2 && eyeHeight >= 1 && eyeHeight <= 3 || eyeWidth == 3 && eyeHeight >= 1 && eyeHeight <= 2;
     }
 
-    private static void submitBlockEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, EyeSide side, EyeLook eyeLook, boolean hurtSclera) {
+    private static void submitBlockEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, EyeSide side, EyeLook eyeLook, boolean hurtSclera, boolean surpriseSclera) {
         float eyeDstY1 = dstY1;
         float eyeDstY2 = dstY1 + eyeHeight;
 
         if (hurtSclera) {
             int externalColumn = externalScleraColumn(side, eyeWidth);
-            submitEyePiece(poseStack, collector, renderType, light, overlay, skinX + externalColumn, skinY, 1.0F, eyeHeight, dstX1, eyeDstY1 - HURT_SCLERA_EXTENSION, dstX1 + eyeWidth, eyeDstY1, NORMAL_COLOR);
+            float extensionSourceHeight = surpriseSclera && eyeWidth == 2 && eyeHeight == 2 ? 1.0F : eyeHeight;
+            submitEyePiece(poseStack, collector, renderType, light, overlay, skinX + externalColumn, skinY, 1.0F, extensionSourceHeight, dstX1, eyeDstY1 - HURT_SCLERA_EXTENSION, dstX1 + eyeWidth, eyeDstY1, NORMAL_COLOR);
         }
 
         submitBlockEyeRow(poseStack, collector, renderType, light, overlay, skinX, skinY, eyeWidth, eyeHeight, eyeHeight, dstX1, eyeDstY1, eyeDstY2, side, eyeLook);
@@ -950,7 +1036,13 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float dstX2 = dstX1 + eyeWidth;
         int eyelidSourceHeight = Math.max(1, Math.round(splitY - dstY1));
         submitEyelidTexture(poseStack, collector, renderType, light, overlay, eyelidX, eyelidY, eyeWidth, eyelidSourceHeight, dstX1, dstY1, dstX2, splitY, eyelidColor, texturedEyelids);
+        submitSquintVisibleEye(poseStack, collector, renderType, light, overlay, skinX, skinY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, eyeLook, side);
+    }
 
+    private static void submitSquintVisibleEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, EyeLook eyeLook, EyeSide side) {
+        float visibleHeight = Math.max(0.333F, (dstY2 - dstY1) * SQUINT_VISIBLE_EYE_COVERAGE);
+        float splitY = Math.max(dstY1, dstY2 - visibleHeight);
+        float dstX2 = dstX1 + eyeWidth;
         float sourceVisibleHeight = eyeHeight * SQUINT_VISIBLE_EYE_COVERAGE;
         float sourceY1 = skinY + eyeHeight - sourceVisibleHeight;
         if (canUseBlockEyeAnimation(eyeWidth, eyeHeight)) {
@@ -1071,6 +1163,26 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return EyeExpression.OPEN;
     }
 
+    private static EyeExpression manualExpression(ReactionsClient.ManualEyeControl control) {
+        if (control.closesEyes()) {
+            return EyeExpression.CLOSED;
+        }
+        if (control.squintsEyes()) {
+            return EyeExpression.SQUINT;
+        }
+        return null;
+    }
+
+    private static EyeLook manualEyeLook(ReactionsClient.ManualEyeControl control) {
+        if (control.looksLeft()) {
+            return EyeLook.LEFT;
+        }
+        if (control.looksRight()) {
+            return EyeLook.RIGHT;
+        }
+        return EyeLook.CENTER;
+    }
+
     private static boolean isBlinking(AvatarRenderState state, ReactionsClientConfig config) {
         int baseInterval = Math.max(20, config.blinkIntervalTicks);
         int randomWindow = Math.max(20, baseInterval / 2);
@@ -1189,6 +1301,21 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
 
     private static RenderType renderType(Identifier texture) {
         return RenderTypes.entityCutout(texture);
+    }
+
+    private static RenderType emissiveRenderType(Identifier texture) {
+        Identifier emissiveTexture = emissiveTexture(texture);
+        return emissiveTexture == null ? null : RenderTypes.entityTranslucentEmissive(emissiveTexture);
+    }
+
+    private static Identifier emissiveTexture(Identifier texture) {
+        String path = texture.getPath();
+        if (!path.endsWith(".png")) {
+            return null;
+        }
+
+        Identifier emissiveTexture = Identifier.fromNamespaceAndPath(texture.getNamespace(), path.substring(0, path.length() - 4) + "_e.png");
+        return Minecraft.getInstance().getResourceManager().getResource(emissiveTexture).isPresent() ? emissiveTexture : null;
     }
 
     private static String playerName(AvatarRenderState state) {

@@ -44,6 +44,10 @@ public final class ReactionsConfigScreen extends Screen {
     private int sizeHeaderY;
     private int eyeWidthRowY;
     private int eyeHeightRowY;
+    private int manualWarningX;
+    private int manualWarningY;
+    private int manualWarningWidth;
+    private int manualWarningHeight;
     private int layoutButtonHeight = BUTTON_HEIGHT;
     private int sizeLimitMessageTicks;
     private boolean compactLayout;
@@ -303,8 +307,10 @@ public final class ReactionsConfigScreen extends Screen {
         graphics.text(this.font, this.title, this.width / 2 - this.font.width(this.title) / 2, 12, 0xFFFFFFFF);
         if (ReactionsClient.manualEyeKeysUnbound()) {
             Component warning = Component.translatable("gui.reactions.manual_eye_keys_unbound");
-            int warningY = Math.max(24, Math.min(this.height - 42, panelY - 12));
-            graphics.text(this.font, warning, this.width / 2 - this.font.width(warning) / 2, warningY, 0xFFFFD45A);
+            updateManualWarningBounds(warning);
+            boolean hovered = isInsideManualWarning(mouseX, mouseY);
+            Component renderedWarning = hovered ? warning.copy().withStyle(style -> style.withUnderlined(true)) : warning;
+            graphics.text(this.font, renderedWarning, manualWarningX, manualWarningY, hovered ? 0xFFFFE8A3 : 0xFFFFD45A);
         }
 
         ReactionsClientConfig.EyeSkinLayer previewLayer = previewEyeSkinLayer();
@@ -333,6 +339,16 @@ public final class ReactionsConfigScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() == 0 && ReactionsClient.manualEyeKeysUnbound()) {
+            updateManualWarningBounds(Component.translatable("gui.reactions.manual_eye_keys_unbound"));
+            if (isInsideManualWarning(event.x(), event.y())) {
+                ReactionsClientConfig.save();
+                if (this.minecraft != null) {
+                    this.minecraft.setScreen(new ReactionsKeyBindsScreen(this));
+                }
+                return true;
+            }
+        }
         if (event.button() == 0 && isInsideFace(event.x(), event.y())) {
             int skinX = FACE_U + (int) ((event.x() - faceX) / pixelSize);
             int skinY = FACE_V + (int) ((event.y() - faceY) / pixelSize);
@@ -529,6 +545,20 @@ public final class ReactionsConfigScreen extends Screen {
             }
         }
         return previewEyeSkinLayer;
+    }
+
+    private void updateManualWarningBounds(Component warning) {
+        manualWarningWidth = this.font.width(warning);
+        manualWarningHeight = 9;
+        manualWarningX = this.width / 2 - manualWarningWidth / 2;
+        manualWarningY = Math.max(24, Math.min(this.height - 42, panelY - 12));
+    }
+
+    private boolean isInsideManualWarning(double mouseX, double mouseY) {
+        return mouseX >= manualWarningX
+            && mouseX < manualWarningX + manualWarningWidth
+            && mouseY >= manualWarningY
+            && mouseY < manualWarningY + manualWarningHeight;
     }
 
     private Component modeText(EditMode targetMode) {

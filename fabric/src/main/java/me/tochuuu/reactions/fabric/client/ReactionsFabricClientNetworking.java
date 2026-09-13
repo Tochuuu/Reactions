@@ -23,8 +23,11 @@ public final class ReactionsFabricClientNetworking extends ReactionsFabricNetwor
         ReactionsNetworking.setPlatform(INSTANCE);
 
         KeyBindingHelper.registerKeyBinding(ReactionsClient.openConfigKey());
+        KeyBindingHelper.registerKeyBinding(ReactionsClient.manualCloseEyesKey());
+        KeyBindingHelper.registerKeyBinding(ReactionsClient.manualSquintEyesKey());
         ClientPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeConfigS2CPayload.TYPE, (payload, context) -> ReactionsNetworking.handleClientboundConfig(payload));
         ClientPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeFocusS2CPayload.TYPE, (payload, context) -> ReactionsNetworking.handleClientboundEyeFocus(payload));
+        ClientPlayNetworking.registerGlobalReceiver(ReactionsNetworking.ManualEyeS2CPayload.TYPE, (payload, context) -> ReactionsNetworking.handleClientboundManualEye(payload));
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ReactionsNetworking.onClientJoin());
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ReactionsNetworking.onClientQuit());
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -44,12 +47,22 @@ public final class ReactionsFabricClientNetworking extends ReactionsFabricNetwor
     }
 
     @Override
+    public boolean canSendManualEyeToServer() {
+        return ClientPlayNetworking.canSend(ReactionsNetworking.ManualEyeC2SPayload.TYPE);
+    }
+
+    @Override
     public void sendToServer(ReactionsNetworking.EyeConfigC2SPayload payload) {
         ClientPlayNetworking.send(payload);
     }
 
     @Override
     public void sendEyeFocusToServer(ReactionsNetworking.EyeFocusC2SPayload payload) {
+        ClientPlayNetworking.send(payload);
+    }
+
+    @Override
+    public void sendManualEyeToServer(ReactionsNetworking.ManualEyeC2SPayload payload) {
         ClientPlayNetworking.send(payload);
     }
 }

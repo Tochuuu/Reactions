@@ -69,12 +69,12 @@ public final class ReactionsConfigScreen extends Screen {
 
     private void initSideBySide(boolean denseLayout) {
         this.denseLayout = denseLayout;
-        int buttonHeight = BUTTON_HEIGHT;
-        int rowGap = denseLayout ? 2 : GAP;
-        int sectionGap = denseLayout ? 4 : 14;
-        int actionGap = denseLayout ? 4 : 18;
-        int doneY = this.height - 26;
-        int controlHeight = buttonHeight * 8 + rowGap * 5 + sectionGap + actionGap;
+        int buttonHeight = denseLayout ? 16 : BUTTON_HEIGHT;
+        int rowGap = denseLayout ? 3 : GAP;
+        int sectionGap = denseLayout ? 6 : 14;
+        int actionGap = denseLayout ? 6 : 18;
+        int doneY = denseLayout ? this.height - buttonHeight - 6 : this.height - 26;
+        int controlHeight = buttonHeight * 9 + rowGap * 6 + sectionGap + actionGap;
 
         layoutButtonHeight = buttonHeight;
         int availableFaceWidth = this.width - PANEL_WIDTH - FACE_PANEL_GAP - 28;
@@ -114,6 +114,9 @@ public final class ReactionsConfigScreen extends Screen {
         y += buttonHeight + rowGap;
         addModeButton(EditMode.LEFT_EYE, panelX, y, half, buttonHeight);
         addModeButton(EditMode.RIGHT_EYE, panelX + half + GAP, y, half, buttonHeight);
+
+        y += buttonHeight + rowGap;
+        addEyeLayerButton(panelX, y, panelWidth, buttonHeight);
 
         y += buttonHeight + rowGap;
         addModeButton(EditMode.MOUTH, panelX, y, half, buttonHeight);
@@ -159,7 +162,7 @@ public final class ReactionsConfigScreen extends Screen {
         int minFaceSize = ultraCompact ? 16 : shortWindow ? 24 : 40;
         int sizeGap = ultraCompact ? 4 : 7;
         int actionGap = ultraCompact ? 1 : shortWindow ? 3 : 6;
-        int controlsHeight = buttonHeight * 8 + rowGap * 5 + sizeGap + actionGap;
+        int controlsHeight = buttonHeight * 9 + rowGap * 6 + sizeGap + actionGap;
 
         faceSize = Math.min(maxFaceSize, Math.max(minFaceSize, Math.min(this.width - 24, this.height - topY - faceGap - controlsHeight - 4)));
         pixelSize = Math.max(1, faceSize / FACE_PIXELS);
@@ -181,6 +184,9 @@ public final class ReactionsConfigScreen extends Screen {
         y += buttonHeight + rowGap;
         addModeButton(EditMode.LEFT_EYE, panelX, y, half, buttonHeight);
         addModeButton(EditMode.RIGHT_EYE, panelX + half + GAP, y, half, buttonHeight);
+
+        y += buttonHeight + rowGap;
+        addEyeLayerButton(panelX, y, panelWidth, buttonHeight);
 
         y += buttonHeight + rowGap;
         addModeButton(EditMode.MOUTH, panelX, y, half, buttonHeight);
@@ -277,15 +283,28 @@ public final class ReactionsConfigScreen extends Screen {
         }).bounds(x, y, width, height).build());
     }
 
+    private void addEyeLayerButton(int x, int y, int width, int height) {
+        addRenderableWidget(Button.builder(eyeLayerText(), button -> {
+            ReactionsClientConfig.get().eyeSkinLayer = ReactionsClientConfig.get().eyeSkinLayer.next();
+            ReactionsClientConfig.save();
+            rebuildWidgets();
+        }).bounds(x, y, width, height).build());
+    }
+
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         ReactionsClientConfig config = ReactionsClientConfig.get();
         super.render(graphics, mouseX, mouseY, partialTick);
 
         graphics.drawString(this.font, this.title, this.width / 2 - this.font.width(this.title) / 2, 12, 0xFFFFFFFF);
+        if (ReactionsClient.manualEyeKeysUnbound()) {
+            Component warning = Component.translatable("gui.reactions.manual_eye_keys_unbound");
+            int warningY = Math.max(24, Math.min(this.height - 42, panelY - 12));
+            graphics.drawString(this.font, warning, this.width / 2 - this.font.width(warning) / 2, warningY, 0xFFFFD45A);
+        }
 
         ResourceLocation texture = skinTexture();
-        graphics.blit(texture, faceX, faceY, faceSize, faceSize, FACE_U, FACE_V, FACE_PIXELS, FACE_PIXELS, SKIN_SIZE, SKIN_SIZE);
+        drawSkinPreview(graphics, texture, config.eyeSkinLayer);
         drawGrid(graphics);
         drawEyeSelection(graphics, config.leftEyeX, config.leftEyeY, config.eyeWidth, config.eyeHeight, 0xFF43D17C);
         drawEyeSelection(graphics, config.rightEyeX, config.rightEyeY, config.eyeWidth, config.eyeHeight, 0xFF4AA3FF);
@@ -346,6 +365,14 @@ public final class ReactionsConfigScreen extends Screen {
             graphics.fill(faceX, line, faceX + faceSize, line + 1, 0x66000000);
         }
         graphics.renderOutline(faceX, faceY, faceSize, faceSize, 0xFFFFFFFF);
+    }
+
+    private void drawSkinPreview(GuiGraphics graphics, ResourceLocation texture, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer) {
+        graphics.blit(texture, faceX, faceY, faceSize, faceSize, FACE_U, FACE_V, FACE_PIXELS, FACE_PIXELS, SKIN_SIZE, SKIN_SIZE);
+        if (eyeSkinLayer == ReactionsClientConfig.EyeSkinLayer.OUTER) {
+            graphics.fill(faceX, faceY, faceX + faceSize, faceY + faceSize, 0x77000000);
+            graphics.blit(texture, faceX, faceY, faceSize, faceSize, ReactionsClientConfig.OUTER_FACE_U, FACE_V, FACE_PIXELS, FACE_PIXELS, SKIN_SIZE, SKIN_SIZE);
+        }
     }
 
     private void drawEyeSelection(GuiGraphics graphics, int skinX, int skinY, int width, int height, int color) {
@@ -442,6 +469,16 @@ public final class ReactionsConfigScreen extends Screen {
             return Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.mouth_anims.short"), onOffShort(ReactionsClientConfig.get().animateMouth));
         }
         return toggleText("gui.reactions.mouth_anims", ReactionsClientConfig.get().animateMouth);
+    }
+
+    private Component eyeLayerText() {
+        return Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.eye_layer"), eyeLayerValueText());
+    }
+
+    private Component eyeLayerValueText() {
+        return Component.translatable(ReactionsClientConfig.get().eyeSkinLayer == ReactionsClientConfig.EyeSkinLayer.OUTER
+            ? "gui.reactions.eye_layer.outer"
+            : "gui.reactions.eye_layer.base");
     }
 
     private Component modeText(EditMode targetMode) {

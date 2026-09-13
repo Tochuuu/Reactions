@@ -62,17 +62,27 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
                     ReactionsNetworking.handleServerboundEyeFocus(payload, serverPlayer);
                 }
             })
+            .playToServer(ReactionsNetworking.ManualEyeC2SPayload.TYPE, ReactionsNetworking.ManualEyeC2SPayload.STREAM_CODEC, (payload, context) -> {
+                if (context.player() instanceof ServerPlayer serverPlayer) {
+                    ReactionsNetworking.handleServerboundManualEye(payload, serverPlayer);
+                }
+            })
             .playToClient(ReactionsNetworking.EyeConfigS2CPayload.TYPE, ReactionsNetworking.EyeConfigS2CPayload.STREAM_CODEC, (payload, context) -> {
                 ReactionsNetworking.handleClientboundConfig(payload);
             })
             .playToClient(ReactionsNetworking.EyeFocusS2CPayload.TYPE, ReactionsNetworking.EyeFocusS2CPayload.STREAM_CODEC, (payload, context) -> {
                 ReactionsNetworking.handleClientboundEyeFocus(payload);
+            })
+            .playToClient(ReactionsNetworking.ManualEyeS2CPayload.TYPE, ReactionsNetworking.ManualEyeS2CPayload.STREAM_CODEC, (payload, context) -> {
+                ReactionsNetworking.handleClientboundManualEye(payload);
             });
     }
 
     private static void registerKeyMappings(RegisterKeyMappingsEvent event) {
         event.registerCategory(ReactionsClient.openConfigKey().getCategory());
         event.register(ReactionsClient.openConfigKey());
+        event.register(ReactionsClient.manualCloseEyesKey());
+        event.register(ReactionsClient.manualSquintEyesKey());
     }
 
     private static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
@@ -126,10 +136,28 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
         return player.connection instanceof ICommonPacketListener listener && canUseChannel(listener, ReactionsNetworking.EyeFocusS2CPayload.TYPE);
     }
 
+    @Override
+    public boolean canSendManualEyeToServer() {
+        ClientPacketListener connection = Minecraft.getInstance().getConnection();
+        return connection instanceof ICommonPacketListener listener && canUseChannel(listener, ReactionsNetworking.ManualEyeC2SPayload.TYPE);
+    }
+
+    @Override
+    public boolean canSendManualEyeToPlayer(ServerPlayer player) {
+        return player.connection instanceof ICommonPacketListener listener
+            && (canUseAdvertisedChannel(listener, ReactionsNetworking.ManualEyeS2CPayload.TYPE)
+            || ReactionsNetworking.hasManualEyeCapability(player.getUUID()) && isOtherConnection(listener));
+    }
+
     private static boolean canUseChannel(ICommonPacketListener listener, net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<?> type) {
-        if (listener.hasChannel(type)) {
-            return true;
-        }
+        return canUseAdvertisedChannel(listener, type) || isOtherConnection(listener);
+    }
+
+    private static boolean canUseAdvertisedChannel(ICommonPacketListener listener, net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<?> type) {
+        return listener.hasChannel(type);
+    }
+
+    private static boolean isOtherConnection(ICommonPacketListener listener) {
         try {
             return listener.getConnectionType().isOther();
         } catch (RuntimeException ignored) {
@@ -154,6 +182,16 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
 
     @Override
     public void sendEyeFocusToPlayer(ServerPlayer player, ReactionsNetworking.EyeFocusS2CPayload payload) {
+        PacketDistributor.sendToPlayer(player, payload);
+    }
+
+    @Override
+    public void sendManualEyeToServer(ReactionsNetworking.ManualEyeC2SPayload payload) {
+        ClientPacketDistributor.sendToServer(payload);
+    }
+
+    @Override
+    public void sendManualEyeToPlayer(ServerPlayer player, ReactionsNetworking.ManualEyeS2CPayload payload) {
         PacketDistributor.sendToPlayer(player, payload);
     }
 }

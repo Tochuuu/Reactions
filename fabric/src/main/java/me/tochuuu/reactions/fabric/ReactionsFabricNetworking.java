@@ -26,9 +26,12 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
         PayloadTypeRegistry.clientboundPlay().register(ReactionsNetworking.EyeConfigS2CPayload.TYPE, ReactionsNetworking.EyeConfigS2CPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ReactionsNetworking.EyeFocusC2SPayload.TYPE, ReactionsNetworking.EyeFocusC2SPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ReactionsNetworking.EyeFocusS2CPayload.TYPE, ReactionsNetworking.EyeFocusS2CPayload.STREAM_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ReactionsNetworking.ManualEyeC2SPayload.TYPE, ReactionsNetworking.ManualEyeC2SPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ReactionsNetworking.ManualEyeS2CPayload.TYPE, ReactionsNetworking.ManualEyeS2CPayload.STREAM_CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeConfigC2SPayload.TYPE, (payload, context) -> ReactionsNetworking.handleServerboundConfig(payload, context.player()));
         ServerPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeFocusC2SPayload.TYPE, (payload, context) -> ReactionsNetworking.handleServerboundEyeFocus(payload, context.player()));
+        ServerPlayNetworking.registerGlobalReceiver(ReactionsNetworking.ManualEyeC2SPayload.TYPE, (payload, context) -> ReactionsNetworking.handleServerboundManualEye(payload, context.player()));
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> ReactionsNetworking.onServerPlayerJoin(handler.player));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> ReactionsNetworking.onServerPlayerQuit(handler.player));
         ServerTickEvents.END_SERVER_TICK.register(ReactionsNetworking::onServerTick);
@@ -54,6 +57,17 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
     public boolean canSendEyeFocusToPlayer(ServerPlayer player) {
         return ServerPlayNetworking.canSend(player, ReactionsNetworking.EyeFocusS2CPayload.TYPE)
             || ReactionsNetworking.hasServerConfig(player.getUUID());
+    }
+
+    @Override
+    public boolean canSendManualEyeToServer() {
+        return false;
+    }
+
+    @Override
+    public boolean canSendManualEyeToPlayer(ServerPlayer player) {
+        return ServerPlayNetworking.canSend(player, ReactionsNetworking.ManualEyeS2CPayload.TYPE)
+            || ReactionsNetworking.hasManualEyeCapability(player.getUUID());
     }
 
     @Override
@@ -84,5 +98,21 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
         }
 
         player.connection.send(new ClientboundCustomPayloadPacket(payload));
+    }
+
+    @Override
+    public void sendManualEyeToServer(ReactionsNetworking.ManualEyeC2SPayload payload) {
+        throw new UnsupportedOperationException("Cannot send serverbound packets from a dedicated server");
+    }
+
+    @Override
+    public void sendManualEyeToPlayer(ServerPlayer player, ReactionsNetworking.ManualEyeS2CPayload payload) {
+        if (ServerPlayNetworking.canSend(player, ReactionsNetworking.ManualEyeS2CPayload.TYPE)) {
+            ServerPlayNetworking.send(player, payload);
+            return;
+        }
+        if (ReactionsNetworking.hasManualEyeCapability(player.getUUID())) {
+            player.connection.send(new ClientboundCustomPayloadPacket(payload));
+        }
     }
 }

@@ -25,6 +25,7 @@ public final class ReactionsFabricClientNetworking extends ReactionsFabricNetwor
         KeyBindingHelper.registerKeyBinding(ReactionsClient.openConfigKey());
         KeyBindingHelper.registerKeyBinding(ReactionsClient.manualCloseEyesKey());
         KeyBindingHelper.registerKeyBinding(ReactionsClient.manualSquintEyesKey());
+        KeyBindingHelper.registerKeyBinding(ReactionsClient.manualLookEyesKey());
         ClientPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeConfigS2CPayload.TYPE, (payload, context) -> ReactionsNetworking.handleClientboundConfig(payload));
         ClientPlayNetworking.registerGlobalReceiver(ReactionsNetworking.EyeFocusS2CPayload.TYPE, (payload, context) -> ReactionsNetworking.handleClientboundEyeFocus(payload));
         ClientPlayNetworking.registerGlobalReceiver(ReactionsNetworking.ManualEyeS2CPayload.TYPE, (payload, context) -> ReactionsNetworking.handleClientboundManualEye(payload));

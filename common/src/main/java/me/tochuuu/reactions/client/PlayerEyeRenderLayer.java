@@ -134,6 +134,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             ? ReactionsClient.manualEyeControl()
             : ReactionsClient.ManualEyeControl.fromNetwork(ReactionsNetworking.remoteManualEyeControl(player.getId()));
         boolean manualEyeActive = !sleeping && manualEyeControl.active();
+        boolean manualWideEyes = manualEyeActive && manualEyeControl.surprisesEyes();
         boolean blinking = !manualEyeActive && !sleeping && animationsEnabled && (isBlinking(player, ageInTicks, config) || fallReaction == FallEyeReaction.LANDING_BLINK);
         int blockFocusEye = animationsEnabled && !blinking ? blockFocusEye(player, isSelf) : 0;
         int mountedBackEye = animationsEnabled && !blinking ? mountedBackEye(player, partialTick) : 0;
@@ -142,7 +143,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         HumanoidArm bowArm = bowUseArm(player);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(player, bowArm);
         DamageEyeReaction damageReaction = animationsEnabled ? damageReaction(player.getId(), player.hurtTime > 0, ageInTicks) : DamageEyeReaction.NONE;
-        boolean fallingSurprise = fallReaction == FallEyeReaction.SURPRISE;
+        boolean fallingSurprise = fallReaction == FallEyeReaction.SURPRISE || manualWideEyes;
         boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallingSurprise;
         MouthUseAnimation mouthUseAnimation = mouthAnimationsEnabled ? mouthUseAnimation(player) : MouthUseAnimation.NONE;
         EyeExpression leftEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, bowSquint);
@@ -152,12 +153,22 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             rightEye = EyeExpression.CLOSED;
         }
         if (manualEyeActive) {
-            EyeExpression manualExpression = manualEyeControl.closesEyes() ? EyeExpression.CLOSED : EyeExpression.SQUINT;
-            if (manualAffectsLeftEye(manualEyeControl, eyeLook)) {
+            EyeExpression manualExpression = manualExpression(manualEyeControl);
+            int manualLook = manualEyeLook(manualEyeControl);
+            boolean manualApplied = false;
+            if (manualExpression != null && manualEyeControl.affectsLeftEye() && spyglassArm != HumanoidArm.LEFT) {
                 leftEye = manualExpression;
+                manualApplied = true;
             }
-            if (manualAffectsRightEye(manualEyeControl, eyeLook)) {
+            if (manualExpression != null && manualEyeControl.affectsRightEye() && spyglassArm != HumanoidArm.RIGHT) {
                 rightEye = manualExpression;
+                manualApplied = true;
+            }
+            if (manualLook != 0) {
+                eyeLook = manualLook;
+                manualApplied = true;
+            } else if (manualApplied || manualEyeControl.surprisesEyes()) {
+                eyeLook = 0;
             }
         }
 
@@ -1179,23 +1190,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     }
 
     private static boolean manualAffectsLeftEye(ReactionsClient.ManualEyeControl control, int eyeLook) {
-        if (control == ReactionsClient.ManualEyeControl.CLOSE_BOTH || control == ReactionsClient.ManualEyeControl.SQUINT_BOTH) {
-            return true;
-        }
-        if (control == ReactionsClient.ManualEyeControl.CLOSE_ONE || control == ReactionsClient.ManualEyeControl.SQUINT_ONE) {
+        if (control == ReactionsClient.ManualEyeControl.CLOSE_ONE) {
             return manualOneEyeSide(eyeLook) == EyeSide.LEFT;
         }
-        return false;
+        return control.affectsLeftEye();
     }
 
     private static boolean manualAffectsRightEye(ReactionsClient.ManualEyeControl control, int eyeLook) {
-        if (control == ReactionsClient.ManualEyeControl.CLOSE_BOTH || control == ReactionsClient.ManualEyeControl.SQUINT_BOTH) {
-            return true;
-        }
-        if (control == ReactionsClient.ManualEyeControl.CLOSE_ONE || control == ReactionsClient.ManualEyeControl.SQUINT_ONE) {
+        if (control == ReactionsClient.ManualEyeControl.CLOSE_ONE) {
             return manualOneEyeSide(eyeLook) == EyeSide.RIGHT;
         }
-        return false;
+        return control.affectsRightEye();
     }
 
     private static EyeSide manualOneEyeSide(int eyeLook) {
@@ -1206,6 +1211,26 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             return EyeSide.RIGHT;
         }
         return EyeSide.RIGHT;
+    }
+
+    private static EyeExpression manualExpression(ReactionsClient.ManualEyeControl control) {
+        if (control.closesEyes()) {
+            return EyeExpression.CLOSED;
+        }
+        if (control.squintsEyes()) {
+            return EyeExpression.SQUINT;
+        }
+        return null;
+    }
+
+    private static int manualEyeLook(ReactionsClient.ManualEyeControl control) {
+        if (control.looksLeft()) {
+            return -1;
+        }
+        if (control.looksRight()) {
+            return 1;
+        }
+        return 0;
     }
 
     private static EyeExpression eyeExpression(boolean sleeping, boolean animationsEnabled, boolean blinking, boolean spyglassClosed, boolean bowSquint) {

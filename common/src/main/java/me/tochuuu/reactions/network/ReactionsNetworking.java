@@ -13,8 +13,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public final class ReactionsNetworking {
@@ -22,22 +24,32 @@ public final class ReactionsNetworking {
     private static final ResourceLocation EYE_CONFIG_S2C = ResourceLocation.fromNamespaceAndPath(Reactions.MOD_ID, "eye_config_s2c");
     private static final ResourceLocation EYE_FOCUS_C2S = ResourceLocation.fromNamespaceAndPath(Reactions.MOD_ID, "eye_focus_c2s");
     private static final ResourceLocation EYE_FOCUS_S2C = ResourceLocation.fromNamespaceAndPath(Reactions.MOD_ID, "eye_focus_s2c");
+    private static final ResourceLocation MANUAL_EYE_C2S = ResourceLocation.fromNamespaceAndPath(Reactions.MOD_ID, "manual_eye_c2s");
+    private static final ResourceLocation MANUAL_EYE_S2C = ResourceLocation.fromNamespaceAndPath(Reactions.MOD_ID, "manual_eye_s2c");
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
     private static final int MIN_EYE_FOCUS = -101;
     private static final int MAX_EYE_FOCUS = 101;
+    private static final int MIN_MANUAL_EYE = 0;
+    private static final int MAX_MANUAL_EYE = 4;
     private static final int CLIENT_SYNC_RETRY_TICKS = 20 * 30;
     private static final int SERVER_SYNC_RETRY_TICKS = 20 * 30;
     private static final Map<Integer, RemoteEyeConfig> CLIENT_CONFIGS = new HashMap<>();
     private static final Map<UUID, RemoteEyeConfig> CLIENT_CONFIGS_BY_UUID = new HashMap<>();
     private static final Map<Integer, Integer> CLIENT_EYE_FOCUSES = new HashMap<>();
     private static final Map<UUID, Integer> CLIENT_EYE_FOCUSES_BY_UUID = new HashMap<>();
+    private static final Map<Integer, Integer> CLIENT_MANUAL_EYES = new HashMap<>();
+    private static final Map<UUID, Integer> CLIENT_MANUAL_EYES_BY_UUID = new HashMap<>();
     private static final Map<UUID, RemoteEyeConfig> SERVER_CONFIGS = new HashMap<>();
     private static final Map<UUID, EyeFocusState> SERVER_EYE_FOCUSES = new HashMap<>();
+    private static final Map<UUID, ManualEyeState> SERVER_MANUAL_EYES = new HashMap<>();
+    private static final Set<UUID> SERVER_MANUAL_EYE_CAPABLE = new HashSet<>();
     private static final Map<UUID, Integer> SERVER_PENDING_SYNC = new HashMap<>();
     private static Platform platform;
     private static int clientSyncTicksRemaining;
     private static int clientSyncCooldown;
+    private static int lastSentManualEyeControl = -1;
+    private static boolean manualEyeSyncPending = true;
     private static boolean clientInitialized;
 
     private ReactionsNetworking() {
@@ -71,6 +83,17 @@ public final class ReactionsNetworking {
         sendEyeFocusToReceivers(serverPlayer, focus);
     }
 
+    public static void handleServerboundManualEye(ManualEyeC2SPayload payload, ServerPlayer serverPlayer) {
+        SERVER_MANUAL_EYE_CAPABLE.add(serverPlayer.getUUID());
+        int control = clamp(payload.control(), MIN_MANUAL_EYE, MAX_MANUAL_EYE);
+        if (control == 0) {
+            SERVER_MANUAL_EYES.remove(serverPlayer.getUUID());
+        } else {
+            SERVER_MANUAL_EYES.put(serverPlayer.getUUID(), new ManualEyeState(serverPlayer.getUUID(), serverPlayer.getId(), control));
+        }
+        sendManualEyeToReceivers(serverPlayer, control);
+    }
+
     public static void handleClientboundConfig(EyeConfigS2CPayload payload) {
         if (payload.action() == UPDATE) {
             applyRemoteConfig(payload.config());
@@ -87,6 +110,14 @@ public final class ReactionsNetworking {
         }
     }
 
+    public static void handleClientboundManualEye(ManualEyeS2CPayload payload) {
+        if (payload.action() == UPDATE) {
+            applyRemoteManualEye(payload.playerId(), payload.entityId(), payload.control());
+        } else if (payload.action() == REMOVE && payload.playerId() != null) {
+            removeRemoteManualEye(payload.playerId());
+        }
+    }
+
     public static void onServerPlayerJoin(ServerPlayer player) {
         SERVER_PENDING_SYNC.put(player.getUUID(), SERVER_SYNC_RETRY_TICKS);
     }
@@ -94,9 +125,12 @@ public final class ReactionsNetworking {
     public static void onServerPlayerQuit(ServerPlayer player) {
         SERVER_CONFIGS.remove(player.getUUID());
         SERVER_EYE_FOCUSES.remove(player.getUUID());
+        SERVER_MANUAL_EYES.remove(player.getUUID());
+        SERVER_MANUAL_EYE_CAPABLE.remove(player.getUUID());
         SERVER_PENDING_SYNC.remove(player.getUUID());
         sendRemoveToReceivers(player);
         sendEyeFocusRemoveToReceivers(player);
+        sendManualEyeRemoveToReceivers(player);
     }
 
     public static void onServerTick(MinecraftServer server) {
@@ -108,6 +142,10 @@ public final class ReactionsNetworking {
         CLIENT_CONFIGS_BY_UUID.clear();
         CLIENT_EYE_FOCUSES.clear();
         CLIENT_EYE_FOCUSES_BY_UUID.clear();
+        CLIENT_MANUAL_EYES.clear();
+        CLIENT_MANUAL_EYES_BY_UUID.clear();
+        lastSentManualEyeControl = -1;
+        manualEyeSyncPending = true;
         requestLocalConfigSync();
     }
 
@@ -116,8 +154,12 @@ public final class ReactionsNetworking {
         CLIENT_CONFIGS_BY_UUID.clear();
         CLIENT_EYE_FOCUSES.clear();
         CLIENT_EYE_FOCUSES_BY_UUID.clear();
+        CLIENT_MANUAL_EYES.clear();
+        CLIENT_MANUAL_EYES_BY_UUID.clear();
         clientSyncTicksRemaining = 0;
         clientSyncCooldown = 0;
+        lastSentManualEyeControl = -1;
+        manualEyeSyncPending = true;
     }
 
     public static void onClientTick() {
@@ -175,8 +217,35 @@ public final class ReactionsNetworking {
         return 0;
     }
 
+    public static int remoteManualEyeControl(int entityId) {
+        Integer control = CLIENT_MANUAL_EYES.get(entityId);
+        if (control != null) {
+            return control;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null) {
+            return 0;
+        }
+
+        for (Player player : minecraft.level.players()) {
+            if (player.getId() == entityId) {
+                control = CLIENT_MANUAL_EYES_BY_UUID.get(player.getUUID());
+                if (control != null) {
+                    CLIENT_MANUAL_EYES.put(entityId, control);
+                    return control;
+                }
+            }
+        }
+        return 0;
+    }
+
     public static boolean hasServerConfig(UUID playerId) {
         return SERVER_CONFIGS.containsKey(playerId);
+    }
+
+    public static boolean hasManualEyeCapability(UUID playerId) {
+        return SERVER_MANUAL_EYE_CAPABLE.contains(playerId);
     }
 
     public static void applyRemoteConfig(RemoteEyeConfig config) {
@@ -200,6 +269,21 @@ public final class ReactionsNetworking {
         syncIntegratedServerHostEyeFocus(clampedFocus);
         if (platform != null && platform.canSendEyeFocusToServer()) {
             platform.sendEyeFocusToServer(new EyeFocusC2SPayload(clampedFocus));
+        }
+    }
+
+    public static void sendLocalManualEyeControl(int control) {
+        int clampedControl = clamp(control, MIN_MANUAL_EYE, MAX_MANUAL_EYE);
+        syncIntegratedServerHostManualEye(clampedControl);
+        if (!manualEyeSyncPending && clampedControl == lastSentManualEyeControl) {
+            return;
+        }
+        if (platform != null && platform.canSendManualEyeToServer()) {
+            platform.sendManualEyeToServer(new ManualEyeC2SPayload(clampedControl));
+            lastSentManualEyeControl = clampedControl;
+            manualEyeSyncPending = false;
+        } else {
+            manualEyeSyncPending = true;
         }
     }
 
@@ -312,6 +396,43 @@ public final class ReactionsNetworking {
         sendEyeFocusToReceivers(host, focus);
     }
 
+    private static void syncIntegratedServerHostManualEye(int control) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null || minecraft.getSingleplayerServer() == null) {
+            return;
+        }
+
+        ServerPlayer host = null;
+        for (ServerPlayer player : minecraft.getSingleplayerServer().getPlayerList().getPlayers()) {
+            if (player.getUUID().equals(minecraft.player.getUUID())) {
+                host = player;
+                break;
+            }
+        }
+        if (host == null) {
+            return;
+        }
+
+        Integer hostEntityId = assignedEntityId(host);
+        if (hostEntityId == null) {
+            return;
+        }
+
+        ManualEyeState current = SERVER_MANUAL_EYES.get(host.getUUID());
+        if (control == 0) {
+            if (current == null) {
+                return;
+            }
+            SERVER_MANUAL_EYES.remove(host.getUUID());
+        } else {
+            if (current != null && current.control() == control && current.entityId() == hostEntityId) {
+                return;
+            }
+            SERVER_MANUAL_EYES.put(host.getUUID(), new ManualEyeState(host.getUUID(), hostEntityId, control));
+        }
+        sendManualEyeToReceivers(host, control);
+    }
+
     private static void retryServerSync(MinecraftServer server) {
         if (SERVER_PENDING_SYNC.isEmpty() || server.getTickCount() % 10 != 0) {
             return;
@@ -337,6 +458,20 @@ public final class ReactionsNetworking {
                 boolean sentAll = true;
                 for (RemoteEyeConfig config : SERVER_CONFIGS.values()) {
                     sentAll &= trySendUpdate(player, config);
+                }
+                if (canSendEyeFocusToPlayer(player)) {
+                    for (EyeFocusState focus : SERVER_EYE_FOCUSES.values()) {
+                        sentAll &= trySendEyeFocusUpdate(player, focus);
+                    }
+                } else if (!SERVER_EYE_FOCUSES.isEmpty()) {
+                    sentAll = false;
+                }
+                if (canSendManualEyeToPlayer(player)) {
+                    for (ManualEyeState manualEye : SERVER_MANUAL_EYES.values()) {
+                        sentAll &= trySendManualEyeUpdate(player, manualEye);
+                    }
+                } else if (!SERVER_MANUAL_EYES.isEmpty()) {
+                    sentAll = false;
                 }
                 if (sentAll) {
                     iterator.remove();
@@ -367,7 +502,18 @@ public final class ReactionsNetworking {
             sentAll &= trySendUpdate(player, config);
         }
         for (EyeFocusState focus : SERVER_EYE_FOCUSES.values()) {
-            sentAll &= trySendEyeFocusUpdate(player, focus);
+            if (canSendEyeFocusToPlayer(player)) {
+                sentAll &= trySendEyeFocusUpdate(player, focus);
+            } else {
+                sentAll = false;
+            }
+        }
+        for (ManualEyeState manualEye : SERVER_MANUAL_EYES.values()) {
+            if (canSendManualEyeToPlayer(player)) {
+                sentAll &= trySendManualEyeUpdate(player, manualEye);
+            } else {
+                sentAll = false;
+            }
         }
         if (!sentAll) {
             queueServerSync(player);
@@ -407,12 +553,41 @@ public final class ReactionsNetworking {
         }
     }
 
+    private static void sendManualEyeToReceivers(ServerPlayer source, int control) {
+        Integer sourceEntityId = assignedEntityId(source);
+        if (sourceEntityId == null) {
+            return;
+        }
+
+        for (ServerPlayer player : source.level().getServer().getPlayerList().getPlayers()) {
+            if (canSendManualEyeToPlayer(player)) {
+                if (!trySendManualEye(player, source.getUUID(), sourceEntityId, control)) {
+                    queueServerSync(player);
+                }
+            } else {
+                queueServerSync(player);
+            }
+        }
+    }
+
+    private static void sendManualEyeRemoveToReceivers(ServerPlayer source) {
+        for (ServerPlayer player : source.level().getServer().getPlayerList().getPlayers()) {
+            if (canSendManualEyeToPlayer(player)) {
+                sendManualEyeRemove(player, source.getUUID());
+            }
+        }
+    }
+
     private static boolean canSendToPlayer(ServerPlayer player) {
         return platform != null && platform.canSendToPlayer(player);
     }
 
     private static boolean canSendEyeFocusToPlayer(ServerPlayer player) {
         return platform != null && platform.canSendEyeFocusToPlayer(player);
+    }
+
+    private static boolean canSendManualEyeToPlayer(ServerPlayer player) {
+        return platform != null && platform.canSendManualEyeToPlayer(player);
     }
 
     private static boolean trySendUpdate(ServerPlayer player, RemoteEyeConfig config) {
@@ -441,6 +616,23 @@ public final class ReactionsNetworking {
         }
     }
 
+    private static boolean trySendManualEyeUpdate(ServerPlayer player, ManualEyeState manualEye) {
+        return trySendManualEye(player, manualEye.playerId(), manualEye.entityId(), manualEye.control());
+    }
+
+    private static boolean trySendManualEye(ServerPlayer player, UUID sourcePlayerId, int sourceEntityId, int control) {
+        try {
+            if (control == 0) {
+                platform.sendManualEyeToPlayer(player, ManualEyeS2CPayload.remove(sourcePlayerId));
+            } else {
+                platform.sendManualEyeToPlayer(player, ManualEyeS2CPayload.update(sourcePlayerId, sourceEntityId, control));
+            }
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
     private static void sendRemove(ServerPlayer player, UUID playerId) {
         try {
             platform.sendToPlayer(player, EyeConfigS2CPayload.remove(playerId));
@@ -451,6 +643,13 @@ public final class ReactionsNetworking {
     private static void sendEyeFocusRemove(ServerPlayer player, UUID playerId) {
         try {
             platform.sendEyeFocusToPlayer(player, EyeFocusS2CPayload.remove(playerId));
+        } catch (RuntimeException ignored) {
+        }
+    }
+
+    private static void sendManualEyeRemove(ServerPlayer player, UUID playerId) {
+        try {
+            platform.sendManualEyeToPlayer(player, ManualEyeS2CPayload.remove(playerId));
         } catch (RuntimeException ignored) {
         }
     }
@@ -478,6 +677,9 @@ public final class ReactionsNetworking {
         buf.writeBoolean(config.cleanEyelidColor());
         buf.writeBoolean(config.texturedEyelids());
         buf.writeByte(config.eyelidTintIntensity());
+        buf.writeByte(config.disabledEye().ordinal());
+        buf.writeBoolean(config.eyebrowsEnabled());
+        buf.writeByte(config.eyeSkinLayer().ordinal());
     }
 
     private static RemoteEyeConfig readUpdateBody(RegistryFriendlyByteBuf buf) {
@@ -506,7 +708,10 @@ public final class ReactionsNetworking {
                 buf.readUnsignedByte(),
                 ReactionsClientConfig.DEFAULT_CLEAN_EYELID_COLOR,
                 ReactionsClientConfig.DEFAULT_TEXTURED_EYELIDS,
-                ReactionsClientConfig.DEFAULT_EYELID_TINT_INTENSITY
+                ReactionsClientConfig.DEFAULT_EYELID_TINT_INTENSITY,
+                ReactionsClientConfig.DisabledEye.NONE,
+                false,
+                ReactionsClientConfig.EyeSkinLayer.BASE
             );
         }
 
@@ -522,10 +727,22 @@ public final class ReactionsNetworking {
         boolean cleanEyelidColor = ReactionsClientConfig.DEFAULT_CLEAN_EYELID_COLOR;
         boolean texturedEyelids = ReactionsClientConfig.DEFAULT_TEXTURED_EYELIDS;
         int eyelidTintIntensity = ReactionsClientConfig.DEFAULT_EYELID_TINT_INTENSITY;
+        ReactionsClientConfig.DisabledEye disabledEye = ReactionsClientConfig.DisabledEye.NONE;
+        boolean eyebrowsEnabled = false;
+        ReactionsClientConfig.EyeSkinLayer eyeSkinLayer = ReactionsClientConfig.EyeSkinLayer.BASE;
         if (buf.readableBytes() >= 3) {
             cleanEyelidColor = buf.readBoolean();
             texturedEyelids = buf.readBoolean();
             eyelidTintIntensity = buf.readUnsignedByte();
+        }
+        if (buf.readableBytes() >= 1) {
+            disabledEye = ReactionsClientConfig.DisabledEye.fromNetwork(buf.readUnsignedByte());
+        }
+        if (buf.readableBytes() >= 1) {
+            eyebrowsEnabled = buf.readBoolean();
+        }
+        if (buf.readableBytes() >= 1) {
+            eyeSkinLayer = ReactionsClientConfig.EyeSkinLayer.fromNetwork(buf.readUnsignedByte());
         }
 
         return new RemoteEyeConfig(
@@ -546,7 +763,10 @@ public final class ReactionsNetworking {
             eyeHeight,
             cleanEyelidColor,
             texturedEyelids,
-            eyelidTintIntensity
+            eyelidTintIntensity,
+            disabledEye,
+            eyebrowsEnabled,
+            eyeSkinLayer
         );
     }
 
@@ -570,7 +790,10 @@ public final class ReactionsNetworking {
             config.eyeHeight,
             config.cleanEyelidColor,
             config.texturedEyelids,
-            config.eyelidTintIntensity
+            config.eyelidTintIntensity,
+            config.disabledEye,
+            config.showEyebrows,
+            config.eyeSkinLayer
         );
     }
 
@@ -601,7 +824,10 @@ public final class ReactionsNetworking {
             config.eyeHeight(),
             config.cleanEyelidColor(),
             config.texturedEyelids(),
-            config.eyelidTintIntensity()
+            config.eyelidTintIntensity(),
+            config.disabledEye(),
+            config.eyebrowsEnabled(),
+            config.eyeSkinLayer()
         );
     }
 
@@ -638,11 +864,45 @@ public final class ReactionsNetworking {
         });
     }
 
+    private static void applyRemoteManualEye(UUID playerId, int entityId, int control) {
+        int clampedControl = clamp(control, MIN_MANUAL_EYE, MAX_MANUAL_EYE);
+        if (clampedControl == 0) {
+            removeRemoteManualEye(playerId);
+            return;
+        }
+        CLIENT_MANUAL_EYES.put(entityId, clampedControl);
+        if (playerId != null) {
+            CLIENT_MANUAL_EYES_BY_UUID.put(playerId, clampedControl);
+        }
+    }
+
+    private static void removeRemoteManualEye(UUID playerId) {
+        CLIENT_MANUAL_EYES_BY_UUID.remove(playerId);
+        CLIENT_MANUAL_EYES.entrySet().removeIf(entry -> {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.level == null) {
+                return false;
+            }
+            for (Player player : minecraft.level.players()) {
+                if (player.getId() == entry.getKey()) {
+                    return playerId.equals(player.getUUID());
+                }
+            }
+            return false;
+        });
+    }
+
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 
     private record EyeFocusState(UUID playerId, int entityId, int focus) {
+    }
+
+    private record ManualEyeState(UUID playerId, int entityId, int control) {
+        private ManualEyeState {
+            control = clamp(control, MIN_MANUAL_EYE, MAX_MANUAL_EYE);
+        }
     }
 
     public interface Platform {
@@ -654,6 +914,10 @@ public final class ReactionsNetworking {
 
         boolean canSendEyeFocusToPlayer(ServerPlayer player);
 
+        boolean canSendManualEyeToServer();
+
+        boolean canSendManualEyeToPlayer(ServerPlayer player);
+
         void sendToServer(EyeConfigC2SPayload payload);
 
         void sendToPlayer(ServerPlayer player, EyeConfigS2CPayload payload);
@@ -661,6 +925,10 @@ public final class ReactionsNetworking {
         void sendEyeFocusToServer(EyeFocusC2SPayload payload);
 
         void sendEyeFocusToPlayer(ServerPlayer player, EyeFocusS2CPayload payload);
+
+        void sendManualEyeToServer(ManualEyeC2SPayload payload);
+
+        void sendManualEyeToPlayer(ServerPlayer player, ManualEyeS2CPayload payload);
     }
 
     public record EyeConfigC2SPayload(RemoteEyeConfig config) implements CustomPacketPayload {
@@ -761,6 +1029,60 @@ public final class ReactionsNetworking {
             if (action == UPDATE) {
                 buf.writeVarInt(entityId);
                 buf.writeByte(focus);
+            }
+        }
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    public record ManualEyeC2SPayload(int control) implements CustomPacketPayload {
+        public static final Type<ManualEyeC2SPayload> TYPE = new Type<>(MANUAL_EYE_C2S);
+        public static final StreamCodec<RegistryFriendlyByteBuf, ManualEyeC2SPayload> STREAM_CODEC = StreamCodec.ofMember(ManualEyeC2SPayload::write, ManualEyeC2SPayload::read);
+
+        private static ManualEyeC2SPayload read(RegistryFriendlyByteBuf buf) {
+            return new ManualEyeC2SPayload(buf.readUnsignedByte());
+        }
+
+        private void write(RegistryFriendlyByteBuf buf) {
+            buf.writeByte(clamp(control, MIN_MANUAL_EYE, MAX_MANUAL_EYE));
+        }
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    public record ManualEyeS2CPayload(int action, UUID playerId, int entityId, int control) implements CustomPacketPayload {
+        public static final Type<ManualEyeS2CPayload> TYPE = new Type<>(MANUAL_EYE_S2C);
+        public static final StreamCodec<RegistryFriendlyByteBuf, ManualEyeS2CPayload> STREAM_CODEC = StreamCodec.ofMember(ManualEyeS2CPayload::write, ManualEyeS2CPayload::read);
+
+        public static ManualEyeS2CPayload update(UUID playerId, int entityId, int control) {
+            return new ManualEyeS2CPayload(UPDATE, playerId, entityId, clamp(control, MIN_MANUAL_EYE, MAX_MANUAL_EYE));
+        }
+
+        public static ManualEyeS2CPayload remove(UUID playerId) {
+            return new ManualEyeS2CPayload(REMOVE, playerId, 0, 0);
+        }
+
+        private static ManualEyeS2CPayload read(RegistryFriendlyByteBuf buf) {
+            int action = buf.readUnsignedByte();
+            UUID playerId = buf.readUUID();
+            if (action == UPDATE) {
+                return update(playerId, buf.readVarInt(), buf.readUnsignedByte());
+            }
+            return remove(playerId);
+        }
+
+        private void write(RegistryFriendlyByteBuf buf) {
+            buf.writeByte(action);
+            buf.writeUUID(playerId);
+            if (action == UPDATE) {
+                buf.writeVarInt(entityId);
+                buf.writeByte(control);
             }
         }
 

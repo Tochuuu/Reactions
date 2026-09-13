@@ -14,8 +14,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public final class ReactionsFabricServerRelay implements ModInitializer {
@@ -23,16 +25,25 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     private static final ResourceLocation EYE_CONFIG_S2C = ResourceLocation.fromNamespaceAndPath("reactions", "eye_config_s2c");
     private static final ResourceLocation EYE_FOCUS_C2S = ResourceLocation.fromNamespaceAndPath("reactions", "eye_focus_c2s");
     private static final ResourceLocation EYE_FOCUS_S2C = ResourceLocation.fromNamespaceAndPath("reactions", "eye_focus_s2c");
+    private static final ResourceLocation MANUAL_EYE_C2S = ResourceLocation.fromNamespaceAndPath("reactions", "manual_eye_c2s");
+    private static final ResourceLocation MANUAL_EYE_S2C = ResourceLocation.fromNamespaceAndPath("reactions", "manual_eye_s2c");
     private static final int UPDATE = 0;
     private static final int REMOVE = 1;
     private static final int MIN_EYE_FOCUS = -101;
     private static final int MAX_EYE_FOCUS = 101;
+    private static final int MIN_MANUAL_EYE = 0;
+    private static final int MAX_MANUAL_EYE = 4;
     private static final int LEGACY_CONFIG_VALUE_COUNT = 8;
     private static final int CONFIG_VALUE_COUNT = 13;
     private static final int EYELID_STYLE_CONFIG_VALUE_COUNT = 16;
+    private static final int DISABLED_EYE_CONFIG_VALUE_COUNT = 17;
+    private static final int EYEBROW_CONFIG_VALUE_COUNT = 18;
+    private static final int EYE_LAYER_CONFIG_VALUE_COUNT = 19;
     private static final int SERVER_SYNC_RETRY_TICKS = 20 * 30;
     private static final Map<UUID, EyeConfig> CONFIGS = new HashMap<>();
     private static final Map<UUID, EyeFocus> FOCUSES = new HashMap<>();
+    private static final Map<UUID, ManualEye> MANUAL_EYES = new HashMap<>();
+    private static final Set<UUID> MANUAL_CAPABLE = new HashSet<>();
     private static final Map<UUID, Integer> PENDING_SYNC = new HashMap<>();
 
     @Override
@@ -41,9 +52,12 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(EyeConfigS2CPayload.TYPE, EyeConfigS2CPayload.STREAM_CODEC);
         PayloadTypeRegistry.playC2S().register(EyeFocusC2SPayload.TYPE, EyeFocusC2SPayload.STREAM_CODEC);
         PayloadTypeRegistry.playS2C().register(EyeFocusS2CPayload.TYPE, EyeFocusS2CPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playC2S().register(ManualEyeC2SPayload.TYPE, ManualEyeC2SPayload.STREAM_CODEC);
+        PayloadTypeRegistry.playS2C().register(ManualEyeS2CPayload.TYPE, ManualEyeS2CPayload.STREAM_CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(EyeConfigC2SPayload.TYPE, (payload, context) -> handleConfig(context.player(), payload.config()));
         ServerPlayNetworking.registerGlobalReceiver(EyeFocusC2SPayload.TYPE, (payload, context) -> handleFocus(context.player(), payload.focus()));
+        ServerPlayNetworking.registerGlobalReceiver(ManualEyeC2SPayload.TYPE, (payload, context) -> handleManualEye(context.player(), payload.control()));
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> PENDING_SYNC.put(handler.player.getUUID(), SERVER_SYNC_RETRY_TICKS));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> removeConfig(handler.player));
         ServerTickEvents.END_SERVER_TICK.register(ReactionsFabricServerRelay::retrySync);
@@ -66,12 +80,26 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         broadcastFocus(source.level().getServer(), clampedFocus == 0 ? EyeFocusS2CPayload.remove(source.getUUID()) : EyeFocusS2CPayload.update(new EyeFocus(source.getUUID(), source.getId(), clampedFocus)));
     }
 
+    private static void handleManualEye(ServerPlayer source, int control) {
+        MANUAL_CAPABLE.add(source.getUUID());
+        int clampedControl = clamp(control, MIN_MANUAL_EYE, MAX_MANUAL_EYE);
+        if (clampedControl == 0) {
+            MANUAL_EYES.remove(source.getUUID());
+        } else {
+            MANUAL_EYES.put(source.getUUID(), new ManualEye(source.getUUID(), source.getId(), clampedControl));
+        }
+        broadcastManual(source.level().getServer(), clampedControl == 0 ? ManualEyeS2CPayload.remove(source.getUUID()) : ManualEyeS2CPayload.update(new ManualEye(source.getUUID(), source.getId(), clampedControl)));
+    }
+
     private static void removeConfig(ServerPlayer player) {
         CONFIGS.remove(player.getUUID());
         FOCUSES.remove(player.getUUID());
+        MANUAL_EYES.remove(player.getUUID());
+        MANUAL_CAPABLE.remove(player.getUUID());
         PENDING_SYNC.remove(player.getUUID());
         broadcast(player.level().getServer(), EyeConfigS2CPayload.remove(player.getUUID()));
         broadcastFocus(player.level().getServer(), EyeFocusS2CPayload.remove(player.getUUID()));
+        broadcastManual(player.level().getServer(), ManualEyeS2CPayload.remove(player.getUUID()));
     }
 
     private static void retrySync(MinecraftServer server) {
@@ -109,6 +137,9 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         for (EyeFocus focus : FOCUSES.values()) {
             sentAll &= sendFocus(player, EyeFocusS2CPayload.update(focus));
         }
+        for (ManualEye manualEye : MANUAL_EYES.values()) {
+            sentAll &= sendManual(player, ManualEyeS2CPayload.update(manualEye));
+        }
         if (!sentAll) {
             PENDING_SYNC.put(player.getUUID(), SERVER_SYNC_RETRY_TICKS);
         }
@@ -126,6 +157,14 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     private static void broadcastFocus(MinecraftServer server, EyeFocusS2CPayload payload) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (!sendFocus(player, payload)) {
+                PENDING_SYNC.put(player.getUUID(), SERVER_SYNC_RETRY_TICKS);
+            }
+        }
+    }
+
+    private static void broadcastManual(MinecraftServer server, ManualEyeS2CPayload payload) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!sendManual(player, payload)) {
                 PENDING_SYNC.put(player.getUUID(), SERVER_SYNC_RETRY_TICKS);
             }
         }
@@ -171,6 +210,26 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         return ServerPlayNetworking.canSend(player, EyeFocusS2CPayload.TYPE) || CONFIGS.containsKey(player.getUUID());
     }
 
+    private static boolean sendManual(ServerPlayer player, ManualEyeS2CPayload payload) {
+        if (!canSendManual(player)) {
+            return false;
+        }
+        try {
+            if (ServerPlayNetworking.canSend(player, ManualEyeS2CPayload.TYPE)) {
+                ServerPlayNetworking.send(player, payload);
+            } else {
+                player.connection.send(new ClientboundCustomPayloadPacket(payload));
+            }
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    private static boolean canSendManual(ServerPlayer player) {
+        return ServerPlayNetworking.canSend(player, ManualEyeS2CPayload.TYPE) || MANUAL_CAPABLE.contains(player.getUUID());
+    }
+
     private static void writeConfig(RegistryFriendlyByteBuf buf, EyeConfig config) {
         buf.writeUUID(config.playerId());
         buf.writeVarInt(config.entityId());
@@ -183,7 +242,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         UUID playerId = buf.readUUID();
         int entityId = buf.readVarInt();
         int readableValues = buf.readableBytes();
-        int valueCount = readableValues >= EYELID_STYLE_CONFIG_VALUE_COUNT ? EYELID_STYLE_CONFIG_VALUE_COUNT : readableValues >= CONFIG_VALUE_COUNT ? CONFIG_VALUE_COUNT : LEGACY_CONFIG_VALUE_COUNT;
+        int valueCount = readableValues >= EYE_LAYER_CONFIG_VALUE_COUNT ? EYE_LAYER_CONFIG_VALUE_COUNT : readableValues >= EYEBROW_CONFIG_VALUE_COUNT ? EYEBROW_CONFIG_VALUE_COUNT : readableValues >= DISABLED_EYE_CONFIG_VALUE_COUNT ? DISABLED_EYE_CONFIG_VALUE_COUNT : readableValues >= EYELID_STYLE_CONFIG_VALUE_COUNT ? EYELID_STYLE_CONFIG_VALUE_COUNT : readableValues >= CONFIG_VALUE_COUNT ? CONFIG_VALUE_COUNT : LEGACY_CONFIG_VALUE_COUNT;
         int[] values = new int[valueCount];
         for (int i = 0; i < values.length; i++) {
             values[i] = buf.readUnsignedByte();
@@ -204,6 +263,12 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     private record EyeFocus(UUID playerId, int entityId, int focus) {
         private EyeFocus {
             focus = clamp(focus, MIN_EYE_FOCUS, MAX_EYE_FOCUS);
+        }
+    }
+
+    private record ManualEye(UUID playerId, int entityId, int control) {
+        private ManualEye {
+            control = clamp(control, MIN_MANUAL_EYE, MAX_MANUAL_EYE);
         }
     }
 
@@ -305,6 +370,62 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
                 buf.writeUUID(focus.playerId());
                 buf.writeVarInt(focus.entityId());
                 buf.writeByte(focus.focus());
+            } else {
+                buf.writeUUID(playerId);
+            }
+        }
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    private record ManualEyeC2SPayload(int control) implements CustomPacketPayload {
+        private static final Type<ManualEyeC2SPayload> TYPE = new Type<>(MANUAL_EYE_C2S);
+        private static final StreamCodec<RegistryFriendlyByteBuf, ManualEyeC2SPayload> STREAM_CODEC = StreamCodec.ofMember(ManualEyeC2SPayload::write, ManualEyeC2SPayload::read);
+
+        private static ManualEyeC2SPayload read(RegistryFriendlyByteBuf buf) {
+            return new ManualEyeC2SPayload(buf.readUnsignedByte());
+        }
+
+        private void write(RegistryFriendlyByteBuf buf) {
+            buf.writeByte(clamp(control, MIN_MANUAL_EYE, MAX_MANUAL_EYE));
+        }
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    private record ManualEyeS2CPayload(int action, ManualEye manualEye, UUID playerId) implements CustomPacketPayload {
+        private static final Type<ManualEyeS2CPayload> TYPE = new Type<>(MANUAL_EYE_S2C);
+        private static final StreamCodec<RegistryFriendlyByteBuf, ManualEyeS2CPayload> STREAM_CODEC = StreamCodec.ofMember(ManualEyeS2CPayload::write, ManualEyeS2CPayload::read);
+
+        private static ManualEyeS2CPayload update(ManualEye manualEye) {
+            return new ManualEyeS2CPayload(UPDATE, manualEye, null);
+        }
+
+        private static ManualEyeS2CPayload remove(UUID playerId) {
+            return new ManualEyeS2CPayload(REMOVE, null, playerId);
+        }
+
+        private static ManualEyeS2CPayload read(RegistryFriendlyByteBuf buf) {
+            int action = buf.readUnsignedByte();
+            UUID playerId = buf.readUUID();
+            if (action == UPDATE) {
+                return update(new ManualEye(playerId, buf.readVarInt(), buf.readUnsignedByte()));
+            }
+            return remove(playerId);
+        }
+
+        private void write(RegistryFriendlyByteBuf buf) {
+            buf.writeByte(action);
+            if (action == UPDATE) {
+                buf.writeUUID(manualEye.playerId());
+                buf.writeVarInt(manualEye.entityId());
+                buf.writeByte(manualEye.control());
             } else {
                 buf.writeUUID(playerId);
             }

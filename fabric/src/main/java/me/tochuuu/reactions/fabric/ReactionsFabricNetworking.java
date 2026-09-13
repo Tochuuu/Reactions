@@ -33,6 +33,10 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
             ReactionsNetworking.EyeFocusC2SPayload payload = ReactionsNetworking.EyeFocusC2SPayload.read(buf);
             server.execute(() -> ReactionsNetworking.handleServerboundEyeFocus(payload, player));
         });
+        ServerPlayNetworking.registerGlobalReceiver(ReactionsNetworking.MANUAL_EYE_C2S, (server, player, handler, buf, responseSender) -> {
+            ReactionsNetworking.ManualEyeC2SPayload payload = ReactionsNetworking.ManualEyeC2SPayload.read(buf);
+            server.execute(() -> ReactionsNetworking.handleServerboundManualEye(payload, player));
+        });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> ReactionsNetworking.onServerPlayerJoin(handler.player));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> ReactionsNetworking.onServerPlayerQuit(handler.player));
         ServerTickEvents.END_SERVER_TICK.register(ReactionsNetworking::onServerTick);
@@ -58,6 +62,17 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
     public boolean canSendEyeFocusToPlayer(ServerPlayer player) {
         return ServerPlayNetworking.canSend(player, ReactionsNetworking.EYE_FOCUS_S2C)
             || ReactionsNetworking.hasServerConfig(player.getUUID());
+    }
+
+    @Override
+    public boolean canSendManualEyeToServer() {
+        return false;
+    }
+
+    @Override
+    public boolean canSendManualEyeToPlayer(ServerPlayer player) {
+        return ServerPlayNetworking.canSend(player, ReactionsNetworking.MANUAL_EYE_S2C)
+            || ReactionsNetworking.hasManualEyeCapability(player.getUUID());
     }
 
     @Override
@@ -94,5 +109,21 @@ public class ReactionsFabricNetworking implements ReactionsNetworking.Platform {
         FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
         writer.accept(buf);
         return buf;
+    }
+
+    @Override
+    public void sendManualEyeToServer(ReactionsNetworking.ManualEyeC2SPayload payload) {
+        throw new UnsupportedOperationException("Cannot send serverbound packets from a dedicated server");
+    }
+
+    @Override
+    public void sendManualEyeToPlayer(ServerPlayer player, ReactionsNetworking.ManualEyeS2CPayload payload) {
+        if (ServerPlayNetworking.canSend(player, ReactionsNetworking.MANUAL_EYE_S2C)) {
+            ServerPlayNetworking.send(player, ReactionsNetworking.MANUAL_EYE_S2C, buffer(payload::write));
+            return;
+        }
+        if (ReactionsNetworking.hasManualEyeCapability(player.getUUID())) {
+            player.connection.send(new ClientboundCustomPayloadPacket(ReactionsNetworking.MANUAL_EYE_S2C, buffer(payload::write)));
+        }
     }
 }

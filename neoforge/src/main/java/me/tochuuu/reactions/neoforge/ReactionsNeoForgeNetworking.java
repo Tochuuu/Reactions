@@ -69,6 +69,8 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
         CHANNEL.registerMessage(nextPacketId++, ReactionsNetworking.EyeConfigS2CPayload.class, ReactionsNetworking.EyeConfigS2CPayload::write, ReactionsNetworking.EyeConfigS2CPayload::read, ReactionsNeoForgeNetworking::handleConfigToClient, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(nextPacketId++, ReactionsNetworking.EyeFocusC2SPayload.class, ReactionsNetworking.EyeFocusC2SPayload::write, ReactionsNetworking.EyeFocusC2SPayload::read, ReactionsNeoForgeNetworking::handleFocusToServer, Optional.of(NetworkDirection.PLAY_TO_SERVER));
         CHANNEL.registerMessage(nextPacketId++, ReactionsNetworking.EyeFocusS2CPayload.class, ReactionsNetworking.EyeFocusS2CPayload::write, ReactionsNetworking.EyeFocusS2CPayload::read, ReactionsNeoForgeNetworking::handleFocusToClient, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(nextPacketId++, ReactionsNetworking.ManualEyeC2SPayload.class, ReactionsNetworking.ManualEyeC2SPayload::write, ReactionsNetworking.ManualEyeC2SPayload::read, ReactionsNeoForgeNetworking::handleManualEyeToServer, Optional.of(NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(nextPacketId++, ReactionsNetworking.ManualEyeS2CPayload.class, ReactionsNetworking.ManualEyeS2CPayload::write, ReactionsNetworking.ManualEyeS2CPayload::read, ReactionsNeoForgeNetworking::handleManualEyeToClient, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
 
     private static void handleConfigToServer(ReactionsNetworking.EyeConfigC2SPayload payload, Supplier<NetworkEvent.Context> contextSupplier) {
@@ -93,6 +95,17 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
         context.setPacketHandled(true);
     }
 
+    private static void handleManualEyeToServer(ReactionsNetworking.ManualEyeC2SPayload payload, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
+        context.enqueueWork(() -> {
+            ServerPlayer player = context.getSender();
+            if (player != null) {
+                ReactionsNetworking.handleServerboundManualEye(payload, player);
+            }
+        });
+        context.setPacketHandled(true);
+    }
+
     private static void handleConfigToClient(ReactionsNetworking.EyeConfigS2CPayload payload, Supplier<NetworkEvent.Context> contextSupplier) {
         NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> ReactionsNetworking.handleClientboundConfig(payload));
@@ -105,8 +118,16 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
         context.setPacketHandled(true);
     }
 
+    private static void handleManualEyeToClient(ReactionsNetworking.ManualEyeS2CPayload payload, Supplier<NetworkEvent.Context> contextSupplier) {
+        NetworkEvent.Context context = contextSupplier.get();
+        context.enqueueWork(() -> ReactionsNetworking.handleClientboundManualEye(payload));
+        context.setPacketHandled(true);
+    }
+
     private static void registerKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(ReactionsClient.openConfigKey());
+        event.register(ReactionsClient.manualCloseEyesKey());
+        event.register(ReactionsClient.manualSquintEyesKey());
     }
 
     private static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {
@@ -163,6 +184,17 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
         return canSendToPlayer(player);
     }
 
+    @Override
+    public boolean canSendManualEyeToServer() {
+        return canSendToServer();
+    }
+
+    @Override
+    public boolean canSendManualEyeToPlayer(ServerPlayer player) {
+        return canUseChannel(player.connection.connection)
+            && ReactionsNetworking.hasManualEyeCapability(player.getUUID());
+    }
+
     private static boolean canUseChannel(Connection connection) {
         return connection != null && CHANNEL.isRemotePresent(connection);
     }
@@ -184,6 +216,16 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
 
     @Override
     public void sendEyeFocusToPlayer(ServerPlayer player, ReactionsNetworking.EyeFocusS2CPayload payload) {
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), payload);
+    }
+
+    @Override
+    public void sendManualEyeToServer(ReactionsNetworking.ManualEyeC2SPayload payload) {
+        CHANNEL.sendToServer(payload);
+    }
+
+    @Override
+    public void sendManualEyeToPlayer(ServerPlayer player, ReactionsNetworking.ManualEyeS2CPayload payload) {
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), payload);
     }
 }

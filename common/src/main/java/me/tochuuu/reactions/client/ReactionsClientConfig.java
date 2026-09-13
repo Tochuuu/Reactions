@@ -23,6 +23,9 @@ public final class ReactionsClientConfig {
     public static final int MAX_EYE_WIDTH = 3;
     public static final int MIN_EYE_HEIGHT = 1;
     public static final int MAX_EYE_HEIGHT = 3;
+    public static final int BASE_FACE_U = 8;
+    public static final int OUTER_FACE_U = 40;
+    public static final int FACE_PIXELS = 8;
     public static final boolean DEFAULT_CLEAN_EYELID_COLOR = false;
     public static final boolean DEFAULT_TEXTURED_EYELIDS = true;
     public static final int DEFAULT_EYELID_TINT_INTENSITY = 50;
@@ -37,7 +40,10 @@ public final class ReactionsClientConfig {
     public boolean texturedEyelids = DEFAULT_TEXTURED_EYELIDS;
     public int eyelidTintIntensity = DEFAULT_EYELID_TINT_INTENSITY;
     public boolean showMouth = true;
+    public boolean showEyebrows = false;
     public boolean animateMouth = true;
+    public DisabledEye disabledEye = DisabledEye.NONE;
+    public EyeSkinLayer eyeSkinLayer = EyeSkinLayer.BASE;
     public int leftEyeX = 9;
     public int leftEyeY = 12;
     public int rightEyeX = 13;
@@ -138,6 +144,12 @@ public final class ReactionsClientConfig {
         if (playerOverrides == null) {
             playerOverrides = new HashMap<>();
         }
+        if (disabledEye == null) {
+            disabledEye = DisabledEye.NONE;
+        }
+        if (eyeSkinLayer == null) {
+            eyeSkinLayer = EyeSkinLayer.BASE;
+        }
         eyeWidth = clampEyeWidth(eyeWidth);
         eyeHeight = clampEyeHeight(eyeHeight);
         if (isBlockedEyeSize(eyeWidth, eyeHeight)) {
@@ -182,12 +194,61 @@ public final class ReactionsClientConfig {
         return clamp(eyelidTintIntensity, 0, 100);
     }
 
+    public static int eyeSourceX(int skinX, EyeSkinLayer layer) {
+        EyeSkinLayer resolvedLayer = layer == null ? EyeSkinLayer.BASE : layer;
+        int localX = clamp(skinX - BASE_FACE_U, 0, FACE_PIXELS - 1);
+        return resolvedLayer.faceU + localX;
+    }
+
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 
     private static String playerKey(String playerName) {
         return playerName.trim().toLowerCase(Locale.ROOT);
+    }
+
+    public enum DisabledEye {
+        NONE,
+        LEFT,
+        RIGHT;
+
+        public boolean disablesLeftEye() {
+            return this == LEFT;
+        }
+
+        public boolean disablesRightEye() {
+            return this == RIGHT;
+        }
+
+        public static DisabledEye fromNetwork(int value) {
+            DisabledEye[] values = values();
+            return value >= 0 && value < values.length ? values[value] : NONE;
+        }
+    }
+
+    public enum EyeSkinLayer {
+        BASE(BASE_FACE_U),
+        OUTER(OUTER_FACE_U);
+
+        private final int faceU;
+
+        EyeSkinLayer(int faceU) {
+            this.faceU = faceU;
+        }
+
+        public int faceU() {
+            return faceU;
+        }
+
+        public EyeSkinLayer next() {
+            return this == BASE ? OUTER : BASE;
+        }
+
+        public static EyeSkinLayer fromNetwork(int value) {
+            EyeSkinLayer[] values = values();
+            return value >= 0 && value < values.length ? values[value] : BASE;
+        }
     }
 
     public static final class PlayerOverride {
@@ -197,6 +258,7 @@ public final class ReactionsClientConfig {
         public int rightEyeX = 13;
         public int rightEyeY = 12;
         public boolean showMouth = true;
+        public boolean showEyebrows = false;
         public int leftMouthX = 11;
         public int leftMouthY = 14;
         public int rightMouthX = 12;
@@ -205,6 +267,8 @@ public final class ReactionsClientConfig {
         public int eyelidColorY = 11;
         public int eyeWidth = 2;
         public int eyeHeight = 1;
+        public DisabledEye disabledEye = DisabledEye.NONE;
+        public EyeSkinLayer eyeSkinLayer = EyeSkinLayer.BASE;
 
         private static PlayerOverride from(ReactionsClientConfig config) {
             PlayerOverride override = new PlayerOverride();
@@ -213,6 +277,7 @@ public final class ReactionsClientConfig {
             override.rightEyeX = config.rightEyeX;
             override.rightEyeY = config.rightEyeY;
             override.showMouth = config.showMouth;
+            override.showEyebrows = config.showEyebrows;
             override.leftMouthX = config.leftMouthX;
             override.leftMouthY = config.leftMouthY;
             override.rightMouthX = config.rightMouthX;
@@ -221,10 +286,18 @@ public final class ReactionsClientConfig {
             override.eyelidColorY = config.eyelidColorY;
             override.eyeWidth = config.eyeWidth;
             override.eyeHeight = config.eyeHeight;
+            override.disabledEye = config.disabledEye;
+            override.eyeSkinLayer = config.eyeSkinLayer;
             return override;
         }
 
         private void clamp() {
+            if (disabledEye == null) {
+                disabledEye = DisabledEye.NONE;
+            }
+            if (eyeSkinLayer == null) {
+                eyeSkinLayer = EyeSkinLayer.BASE;
+            }
             eyeWidth = ReactionsClientConfig.clampEyeWidth(eyeWidth);
             eyeHeight = ReactionsClientConfig.clampEyeHeight(eyeHeight);
             if (ReactionsClientConfig.isBlockedEyeSize(eyeWidth, eyeHeight)) {

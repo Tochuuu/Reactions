@@ -31,7 +31,7 @@ public final class ReactionsNetworking {
     private static final int MIN_EYE_FOCUS = -101;
     private static final int MAX_EYE_FOCUS = 101;
     private static final int MIN_MANUAL_EYE = 0;
-    private static final int MAX_MANUAL_EYE = 4;
+    private static final int MAX_MANUAL_EYE = 11;
     private static final int CLIENT_SYNC_RETRY_TICKS = 20 * 30;
     private static final int SERVER_SYNC_RETRY_TICKS = 20 * 30;
     private static final Map<Integer, RemoteEyeConfig> CLIENT_CONFIGS = new HashMap<>();

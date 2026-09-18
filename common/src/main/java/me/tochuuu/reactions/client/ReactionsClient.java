@@ -12,7 +12,7 @@ public final class ReactionsClient {
     private static final int HOLD_ACTIVATION_DELAY_TICKS = 1;
     private static final int LOOK_RELEASE_GRACE_TICKS = 2;
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(Reactions.MOD_ID, "key"));
-    private static final KeyMapping OPEN_CONFIG = new KeyMapping("key.reactions.open_config", InputConstants.Type.KEYSYM, InputConstants.KEY_R, CATEGORY);
+    private static final KeyMapping OPEN_CONFIG = new KeyMapping("key.reactions.open_config", InputConstants.Type.KEYBOARD, InputConstants.KEY_R, CATEGORY);
     private static final KeyMapping MANUAL_CLOSE_EYES = new KeyMapping("key.reactions.manual_close_eyes", InputConstants.UNKNOWN.getType(), InputConstants.UNKNOWN.getValue(), CATEGORY);
     private static final KeyMapping MANUAL_SQUINT_EYES = new KeyMapping("key.reactions.manual_squint_eyes", InputConstants.UNKNOWN.getType(), InputConstants.UNKNOWN.getValue(), CATEGORY);
     private static final KeyMapping MANUAL_LOOK_EYES = new KeyMapping("key.reactions.manual_look_eyes", InputConstants.UNKNOWN.getType(), InputConstants.UNKNOWN.getValue(), CATEGORY);

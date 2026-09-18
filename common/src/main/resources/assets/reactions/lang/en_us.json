@@ -16,7 +16,7 @@
   "gui.reactions.self_anims": "Self Animations",
   "gui.reactions.other_anims": "Others Animations",
   "gui.reactions.mouth": "Mouth",
-  "gui.reactions.eye_layer": "Eye Layer",
+  "gui.reactions.eye_layer": "Skin Layer",
   "gui.reactions.eye_layer.base": "1",
   "gui.reactions.eye_layer.outer": "2",
   "gui.reactions.manual_eye_keys_unbound": "Manual eye keys are not assigned in Controls",

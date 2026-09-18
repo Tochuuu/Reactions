@@ -680,6 +680,10 @@ public final class ReactionsNetworking {
         buf.writeByte(config.disabledEye().ordinal());
         buf.writeBoolean(config.eyebrowsEnabled());
         buf.writeByte(config.eyeSkinLayer().ordinal());
+        buf.writeByte(config.leftEyeSkinLayer().ordinal());
+        buf.writeByte(config.rightEyeSkinLayer().ordinal());
+        buf.writeByte(config.mouthSkinLayer().ordinal());
+        buf.writeByte(config.eyelidColorSkinLayer().ordinal());
     }
 
     private static RemoteEyeConfig readUpdateBody(RegistryFriendlyByteBuf buf) {
@@ -711,6 +715,10 @@ public final class ReactionsNetworking {
                 ReactionsClientConfig.DEFAULT_EYELID_TINT_INTENSITY,
                 ReactionsClientConfig.DisabledEye.NONE,
                 false,
+                ReactionsClientConfig.EyeSkinLayer.BASE,
+                ReactionsClientConfig.EyeSkinLayer.BASE,
+                ReactionsClientConfig.EyeSkinLayer.BASE,
+                ReactionsClientConfig.EyeSkinLayer.BASE,
                 ReactionsClientConfig.EyeSkinLayer.BASE
             );
         }
@@ -730,6 +738,10 @@ public final class ReactionsNetworking {
         ReactionsClientConfig.DisabledEye disabledEye = ReactionsClientConfig.DisabledEye.NONE;
         boolean eyebrowsEnabled = false;
         ReactionsClientConfig.EyeSkinLayer eyeSkinLayer = ReactionsClientConfig.EyeSkinLayer.BASE;
+        ReactionsClientConfig.EyeSkinLayer leftEyeSkinLayer = null;
+        ReactionsClientConfig.EyeSkinLayer rightEyeSkinLayer = null;
+        ReactionsClientConfig.EyeSkinLayer mouthSkinLayer = null;
+        ReactionsClientConfig.EyeSkinLayer eyelidColorSkinLayer = null;
         if (buf.readableBytes() >= 3) {
             cleanEyelidColor = buf.readBoolean();
             texturedEyelids = buf.readBoolean();
@@ -743,6 +755,16 @@ public final class ReactionsNetworking {
         }
         if (buf.readableBytes() >= 1) {
             eyeSkinLayer = ReactionsClientConfig.EyeSkinLayer.fromNetwork(buf.readUnsignedByte());
+        }
+        if (buf.readableBytes() >= 2) {
+            leftEyeSkinLayer = ReactionsClientConfig.EyeSkinLayer.fromNetwork(buf.readUnsignedByte());
+            rightEyeSkinLayer = ReactionsClientConfig.EyeSkinLayer.fromNetwork(buf.readUnsignedByte());
+        }
+        if (buf.readableBytes() >= 1) {
+            mouthSkinLayer = ReactionsClientConfig.EyeSkinLayer.fromNetwork(buf.readUnsignedByte());
+        }
+        if (buf.readableBytes() >= 1) {
+            eyelidColorSkinLayer = ReactionsClientConfig.EyeSkinLayer.fromNetwork(buf.readUnsignedByte());
         }
 
         return new RemoteEyeConfig(
@@ -766,7 +788,11 @@ public final class ReactionsNetworking {
             eyelidTintIntensity,
             disabledEye,
             eyebrowsEnabled,
-            eyeSkinLayer
+            eyeSkinLayer,
+            leftEyeSkinLayer,
+            rightEyeSkinLayer,
+            mouthSkinLayer,
+            eyelidColorSkinLayer
         );
     }
 
@@ -793,7 +819,11 @@ public final class ReactionsNetworking {
             config.eyelidTintIntensity,
             config.disabledEye,
             config.showEyebrows,
-            config.eyeSkinLayer
+            config.eyeSkinLayer,
+            config.leftEyeSkinLayer,
+            config.rightEyeSkinLayer,
+            config.mouthSkinLayer,
+            config.eyelidColorSkinLayer
         );
     }
 
@@ -827,7 +857,11 @@ public final class ReactionsNetworking {
             config.eyelidTintIntensity(),
             config.disabledEye(),
             config.eyebrowsEnabled(),
-            config.eyeSkinLayer()
+            config.eyeSkinLayer(),
+            config.leftEyeSkinLayer(),
+            config.rightEyeSkinLayer(),
+            config.mouthSkinLayer(),
+            config.eyelidColorSkinLayer()
         );
     }
 

@@ -38,6 +38,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
     private static final int DISABLED_EYE_CONFIG_VALUE_COUNT = 17;
     private static final int EYEBROW_CONFIG_VALUE_COUNT = 18;
     private static final int EYE_LAYER_CONFIG_VALUE_COUNT = 19;
+    private static final int FEATURE_LAYER_CONFIG_VALUE_COUNT = 23;
     private static final int SERVER_SYNC_RETRY_TICKS = 20 * 30;
     private static final Map<UUID, EyeConfig> CONFIGS = new HashMap<>();
     private static final Map<UUID, EyeFocus> FOCUSES = new HashMap<>();
@@ -249,7 +250,7 @@ public final class ReactionsFabricServerRelay implements ModInitializer {
         UUID playerId = buf.readUUID();
         int entityId = buf.readVarInt();
         int readableValues = buf.readableBytes();
-        int valueCount = readableValues >= EYE_LAYER_CONFIG_VALUE_COUNT ? EYE_LAYER_CONFIG_VALUE_COUNT : readableValues >= EYEBROW_CONFIG_VALUE_COUNT ? EYEBROW_CONFIG_VALUE_COUNT : readableValues >= DISABLED_EYE_CONFIG_VALUE_COUNT ? DISABLED_EYE_CONFIG_VALUE_COUNT : readableValues >= EYELID_STYLE_CONFIG_VALUE_COUNT ? EYELID_STYLE_CONFIG_VALUE_COUNT : readableValues >= CONFIG_VALUE_COUNT ? CONFIG_VALUE_COUNT : LEGACY_CONFIG_VALUE_COUNT;
+        int valueCount = readableValues >= FEATURE_LAYER_CONFIG_VALUE_COUNT ? FEATURE_LAYER_CONFIG_VALUE_COUNT : readableValues >= EYE_LAYER_CONFIG_VALUE_COUNT ? EYE_LAYER_CONFIG_VALUE_COUNT : readableValues >= EYEBROW_CONFIG_VALUE_COUNT ? EYEBROW_CONFIG_VALUE_COUNT : readableValues >= DISABLED_EYE_CONFIG_VALUE_COUNT ? DISABLED_EYE_CONFIG_VALUE_COUNT : readableValues >= EYELID_STYLE_CONFIG_VALUE_COUNT ? EYELID_STYLE_CONFIG_VALUE_COUNT : readableValues >= CONFIG_VALUE_COUNT ? CONFIG_VALUE_COUNT : LEGACY_CONFIG_VALUE_COUNT;
         int[] values = new int[valueCount];
         for (int i = 0; i < values.length; i++) {
             values[i] = buf.readUnsignedByte();

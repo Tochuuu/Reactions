@@ -47,6 +47,14 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         {1.60F, 1.25F},
         {1.45F, 1.05F}
     };
+    private static final int DRINKING_STOP_MOTION_STEP_TICKS = 3;
+    private static final float[][] DRINKING_STOP_MOTION_FRAMES = {
+        {1.15F, 1.15F},
+        {1.25F, 1.35F},
+        {1.20F, 1.25F},
+        {1.30F, 1.40F},
+        {1.18F, 1.20F}
+    };
     private static final int NORMAL_COLOR = 0xFFFFFFFF;
     private static final int EYELID_DARKEN_COLOR = 0xFFB0B0B0;
     private static final int LARGE_EYELID_DARKEN_COLOR = 0xFFD0D0D0;
@@ -64,7 +72,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final float LOOK_DOWN_SCLERA_BOTTOM_COVERAGE = 0.16F;
     private static final float BLOCK_FOCUS_EYE_THRESHOLD = 0.25F;
     private static final float MOUNTED_BACK_LOOK_THRESHOLD = 75.0F;
-    private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, false, 11, 14, 12, 14, 10, 11, 2, 1, ReactionsClientConfig.DisabledEye.NONE, ReactionsClientConfig.EyeSkinLayer.BASE);
+    private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, false, 11, 14, 12, 14, 10, 11, 2, 1, ReactionsClientConfig.DisabledEye.NONE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> DAMAGE_REACTIONS = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> LAST_DAMAGE_REACTIONS = new java.util.HashMap<>();
@@ -140,14 +148,14 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         int overlay = eyelidTintEnabled ? OverlayTexture.pack(0.0F, state.hasRedOverlay) : OverlayTexture.NO_OVERLAY;
         int eyelidColor = eyelidColor(eyelidStyle.cleanEyelidColor, eyelidStyle.eyelidTintIntensity, eyes.eyeHeight);
         if (eyes.eyebrowsEnabled) {
-            submitEyebrowAboveEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyeWidth, eyes.eyeSkinLayer, eyebrowVerticalOffset(leftEye, eyes.eyeWidth, eyes.eyeHeight, hurtSclera));
-            submitEyebrowAboveEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyeWidth, eyes.eyeSkinLayer, eyebrowVerticalOffset(rightEye, eyes.eyeWidth, eyes.eyeHeight, hurtSclera));
+            submitEyebrowAboveEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyeWidth, eyes.leftEyeSkinLayer, eyebrowVerticalOffset(leftEye, eyes.eyeWidth, eyes.eyeHeight, hurtSclera));
+            submitEyebrowAboveEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyeWidth, eyes.rightEyeSkinLayer, eyebrowVerticalOffset(rightEye, eyes.eyeWidth, eyes.eyeHeight, hurtSclera));
         }
         if (!eyes.disabledEye.disablesLeftEye()) {
-            submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.eyeSkinLayer, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
+            submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.leftEyeSkinLayer, eyes.eyelidColorSkinLayer, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
         }
         if (!eyes.disabledEye.disablesRightEye()) {
-            submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.eyeSkinLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
+            submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.rightEyeSkinLayer, eyes.eyelidColorSkinLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
         }
         if (mouthAnimationsEnabled && AdvancementMouthReaction.active(state.id)) {
             submitAdvancementMouth(poseStack, collector, renderType, light, overlay, eyes);
@@ -190,7 +198,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         model.head.translateAndRotate(poseStack);
     }
 
-    private static void submitEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, EyeExpression expression, int eyeLook, EyeSide side, boolean hurtSclera, boolean fallingSurprise, int eyelidColor, boolean texturedEyelids) {
+    private static void submitEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, ReactionsClientConfig.EyeSkinLayer eyelidColorSkinLayer, EyeExpression expression, int eyeLook, EyeSide side, boolean hurtSclera, boolean fallingSurprise, int eyelidColor, boolean texturedEyelids) {
         int clampedSkinX = clamp(skinX, (int) HEAD_FRONT_U, (int) (HEAD_FRONT_U + 8.0F) - eyeWidth);
         int clampedSkinY = clamp(skinY, (int) HEAD_FRONT_V, (int) (HEAD_FRONT_V + 8.0F) - eyeHeight);
         int sourceSkinX = ReactionsClientConfig.eyeSourceX(clampedSkinX, eyeSkinLayer);
@@ -200,7 +208,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float dstX2 = dstX1 + eyeWidth;
 
         if (expression == EyeExpression.CLOSED) {
-            submitEyelidTexture(poseStack, collector, renderType, light, overlay, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, dstX1, dstY1, dstX2, dstY2, eyelidColor, texturedEyelids);
+            submitEyelidTexture(poseStack, collector, renderType, light, overlay, eyelidColorX, eyelidColorY, eyelidColorSkinLayer, eyeWidth, eyeHeight, dstX1, dstY1, dstX2, dstY2, eyelidColor, texturedEyelids);
             return;
         }
 
@@ -215,7 +223,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         }
 
         if (expression == EyeExpression.SQUINT) {
-            submitSquintEye(poseStack, collector, renderType, light, overlay, sourceSkinX, clampedSkinY, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, eyeLook, side, eyelidColor, texturedEyelids);
+            submitSquintEye(poseStack, collector, renderType, light, overlay, sourceSkinX, clampedSkinY, eyelidColorX, eyelidColorY, eyelidColorSkinLayer, eyeWidth, eyeHeight, dstX1, dstY1, dstY2, eyeLook, side, eyelidColor, texturedEyelids);
             return;
         }
 
@@ -278,17 +286,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return eyeExtendsUp ? -HURT_SCLERA_EXTENSION : 0.0F;
     }
 
-    private record EyeSettings(int leftEyeX, int leftEyeY, int rightEyeX, int rightEyeY, boolean mouthEnabled, boolean eyebrowsEnabled, int leftMouthX, int leftMouthY, int rightMouthX, int rightMouthY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, ReactionsClientConfig.DisabledEye disabledEye, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer) {
+    private record EyeSettings(int leftEyeX, int leftEyeY, int rightEyeX, int rightEyeY, boolean mouthEnabled, boolean eyebrowsEnabled, int leftMouthX, int leftMouthY, int rightMouthX, int rightMouthY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, ReactionsClientConfig.DisabledEye disabledEye, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, ReactionsClientConfig.EyeSkinLayer leftEyeSkinLayer, ReactionsClientConfig.EyeSkinLayer rightEyeSkinLayer, ReactionsClientConfig.EyeSkinLayer mouthSkinLayer, ReactionsClientConfig.EyeSkinLayer eyelidColorSkinLayer) {
         private static EyeSettings local(ReactionsClientConfig config) {
-            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.showMouth, config.showEyebrows, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight, config.disabledEye, config.eyeSkinLayer);
+            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.showMouth, config.showEyebrows, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight, config.disabledEye, config.eyeSkinLayer, config.leftEyeSkinLayer, config.rightEyeSkinLayer, config.mouthSkinLayer, config.eyelidColorSkinLayer);
         }
 
         private static EyeSettings remote(RemoteEyeConfig config) {
-            return new EyeSettings(config.leftEyeX(), config.leftEyeY(), config.rightEyeX(), config.rightEyeY(), config.mouthEnabled(), config.eyebrowsEnabled(), config.leftMouthX(), config.leftMouthY(), config.rightMouthX(), config.rightMouthY(), config.eyelidColorX(), config.eyelidColorY(), config.eyeWidth(), config.eyeHeight(), config.disabledEye(), config.eyeSkinLayer());
+            return new EyeSettings(config.leftEyeX(), config.leftEyeY(), config.rightEyeX(), config.rightEyeY(), config.mouthEnabled(), config.eyebrowsEnabled(), config.leftMouthX(), config.leftMouthY(), config.rightMouthX(), config.rightMouthY(), config.eyelidColorX(), config.eyelidColorY(), config.eyeWidth(), config.eyeHeight(), config.disabledEye(), config.eyeSkinLayer(), config.leftEyeSkinLayer(), config.rightEyeSkinLayer(), config.mouthSkinLayer(), config.eyelidColorSkinLayer());
         }
 
         private static EyeSettings override(ReactionsClientConfig.PlayerOverride config) {
-            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.showMouth, config.showEyebrows, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight, config.disabledEye, config.eyeSkinLayer);
+            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.showMouth, config.showEyebrows, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight, config.disabledEye, config.eyeSkinLayer, config.leftEyeSkinLayer, config.rightEyeSkinLayer, config.mouthSkinLayer, config.eyelidColorSkinLayer);
         }
 
         private static EyeSettings defaults() {
@@ -665,8 +673,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static void submitMouth(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes) {
         float dstX1 = eyes.leftMouthX - HEAD_FRONT_U - 4.0F;
         float dstY1 = eyes.leftMouthY - HEAD_FRONT_V - 8.0F;
-        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, dstX1, dstY1, dstX1 + 1.0F, dstY1 + 1.0F);
-        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, dstX1 + 1.0F, dstY1, dstX1 + 2.0F, dstY1 + 1.0F);
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, eyes.mouthSkinLayer, dstX1, dstY1, dstX1 + 1.0F, dstY1 + 1.0F);
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, eyes.mouthSkinLayer, dstX1 + 1.0F, dstY1, dstX1 + 2.0F, dstY1 + 1.0F);
     }
 
     private static void submitAdvancementMouth(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes) {
@@ -681,8 +689,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float dstX1 = centerX - HEAD_FRONT_U - 4.0F - width * 0.5F;
         float dstY1 = centerY - HEAD_FRONT_V - 8.0F - 0.5F - ADVANCEMENT_MOUTH_TOP_EXTENSION;
         float splitX = dstX1 + width * 0.5F;
-        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, 1.25F, dstX1, dstY1, splitX, dstY1 + height + ADVANCEMENT_MOUTH_TOP_EXTENSION);
-        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, 1.25F, splitX, dstY1, dstX1 + width, dstY1 + height + ADVANCEMENT_MOUTH_TOP_EXTENSION);
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, eyes.mouthSkinLayer, 1.25F, dstX1, dstY1, splitX, dstY1 + height + ADVANCEMENT_MOUTH_TOP_EXTENSION);
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, eyes.mouthSkinLayer, 1.25F, splitX, dstY1, dstX1 + width, dstY1 + height + ADVANCEMENT_MOUTH_TOP_EXTENSION);
     }
 
     private static void submitUseMouth(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes, PlayerActionAnimationState.MouthUseAnimation animation, float ageInTicks, int entityId) {
@@ -698,20 +706,20 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             width = EATING_STOP_MOTION_FRAMES[frame][0];
             height = EATING_STOP_MOTION_FRAMES[frame][1];
         } else {
-            float wave = 0.5F + 0.5F * (float) Math.sin(offsetTicks * Math.PI * 0.35D);
-            width = 1.15F + wave * 0.15F;
-            height = 1.15F + wave * 0.25F;
+            int frame = Math.floorMod((int) offsetTicks / DRINKING_STOP_MOTION_STEP_TICKS, DRINKING_STOP_MOTION_FRAMES.length);
+            width = DRINKING_STOP_MOTION_FRAMES[frame][0];
+            height = DRINKING_STOP_MOTION_FRAMES[frame][1];
         }
         float centerX = ((eyes.leftMouthX + 0.5F) + (eyes.rightMouthX + 0.5F)) * 0.5F;
         float dstX1 = centerX - HEAD_FRONT_U - 4.0F - width * 0.5F;
         float dstY1 = coverY + 0.05F;
         float splitX = dstX1 + width * 0.5F;
-        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, 1.0F, dstX1, dstY1, splitX, dstY1 + height);
-        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, 1.0F, splitX, dstY1, dstX1 + width, dstY1 + height);
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.leftMouthX, eyes.leftMouthY, eyes.mouthSkinLayer, 1.0F, dstX1, dstY1, splitX, dstY1 + height);
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, eyes.rightMouthX, eyes.rightMouthY, eyes.mouthSkinLayer, 1.0F, splitX, dstY1, dstX1 + width, dstY1 + height);
     }
 
     private static void submitMouthCover(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes, float dstX1, float dstY1, float width, float height) {
-        int sourceX = clamp(eyes.leftMouthX - 1, 0, (int) SKIN_SIZE - 1);
+        int sourceX = ReactionsClientConfig.eyeSourceX(eyes.leftMouthX - 1, eyes.mouthSkinLayer);
         int sourceY = clamp(eyes.leftMouthY, 0, (int) SKIN_SIZE - 1);
         float u1 = (sourceX + MOUTH_UV_INSET) / SKIN_SIZE;
         float v1 = (sourceY + MOUTH_UV_INSET) / SKIN_SIZE;
@@ -720,12 +728,12 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> mouthCoverQuad(vertexConsumer, pose, dstX1, dstY1, dstX1 + width, dstY1 + height, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
     }
 
-    private static void submitMouthPixel(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, float dstX1, float dstY1, float dstX2, float dstY2) {
-        submitMouthPixel(poseStack, collector, renderType, light, overlay, skinX, skinY, 1.0F, dstX1, dstY1, dstX2, dstY2);
+    private static void submitMouthPixel(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, ReactionsClientConfig.EyeSkinLayer skinLayer, float dstX1, float dstY1, float dstX2, float dstY2) {
+        submitMouthPixel(poseStack, collector, renderType, light, overlay, skinX, skinY, skinLayer, 1.0F, dstX1, dstY1, dstX2, dstY2);
     }
 
-    private static void submitMouthPixel(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, float sourceHeight, float dstX1, float dstY1, float dstX2, float dstY2) {
-        int sourceX = clamp(skinX, 0, (int) SKIN_SIZE - 1);
+    private static void submitMouthPixel(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, ReactionsClientConfig.EyeSkinLayer skinLayer, float sourceHeight, float dstX1, float dstY1, float dstX2, float dstY2) {
+        int sourceX = ReactionsClientConfig.eyeSourceX(skinX, skinLayer);
         int sourceY = clamp(skinY, 0, (int) SKIN_SIZE - 1);
         float clampedSourceHeight = Math.min(sourceHeight, SKIN_SIZE - sourceY);
         float u1 = (sourceX + MOUTH_UV_INSET) / SKIN_SIZE;
@@ -827,8 +835,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> pupilQuad(vertexConsumer, pose, dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, color));
     }
 
-    private static void submitEyelidTexture(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int eyelidX, int eyelidY, int tileColumns, int tileRows, float dstX1, float dstY1, float dstX2, float dstY2, int color, boolean texturedEyelids) {
-        int sourceX = clamp(eyelidX, 0, (int) SKIN_SIZE - 1);
+    private static void submitEyelidTexture(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int eyelidX, int eyelidY, ReactionsClientConfig.EyeSkinLayer eyelidSkinLayer, int tileColumns, int tileRows, float dstX1, float dstY1, float dstX2, float dstY2, int color, boolean texturedEyelids) {
+        int sourceX = ReactionsClientConfig.eyeSourceX(eyelidX, eyelidSkinLayer);
         int sourceY = clamp(eyelidY, 0, (int) SKIN_SIZE - 1);
         int columns = Math.max(1, tileColumns);
         int rows = Math.max(1, tileRows);
@@ -935,12 +943,12 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return eyeLook == -1 && side == EyeSide.LEFT || eyeLook == 1 && side == EyeSide.RIGHT;
     }
 
-    private static void submitSquintEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidX, int eyelidY, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, int eyeLook, EyeSide side, int eyelidColor, boolean texturedEyelids) {
+    private static void submitSquintEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidX, int eyelidY, ReactionsClientConfig.EyeSkinLayer eyelidSkinLayer, int eyeWidth, int eyeHeight, float dstX1, float dstY1, float dstY2, int eyeLook, EyeSide side, int eyelidColor, boolean texturedEyelids) {
         float visibleHeight = Math.max(0.333F, (dstY2 - dstY1) * SQUINT_VISIBLE_EYE_COVERAGE);
         float splitY = Math.max(dstY1, dstY2 - visibleHeight);
         float dstX2 = dstX1 + eyeWidth;
         int eyelidSourceHeight = Math.max(1, Math.round(splitY - dstY1));
-        submitEyelidTexture(poseStack, collector, renderType, light, overlay, eyelidX, eyelidY, eyeWidth, eyelidSourceHeight, dstX1, dstY1, dstX2, splitY, eyelidColor, texturedEyelids);
+        submitEyelidTexture(poseStack, collector, renderType, light, overlay, eyelidX, eyelidY, eyelidSkinLayer, eyeWidth, eyelidSourceHeight, dstX1, dstY1, dstX2, splitY, eyelidColor, texturedEyelids);
 
         float sourceVisibleHeight = eyeHeight * SQUINT_VISIBLE_EYE_COVERAGE;
         float sourceY1 = skinY + eyeHeight - sourceVisibleHeight;

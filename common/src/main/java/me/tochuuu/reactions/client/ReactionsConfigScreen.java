@@ -47,6 +47,8 @@ public final class ReactionsConfigScreen extends Screen {
     private int layoutButtonHeight = BUTTON_HEIGHT;
     private int sizeLimitMessageTicks;
     private boolean compactLayout;
+    private boolean denseLayout;
+    private ReactionsClientConfig.EyeSkinLayer previewEyeSkinLayer;
     private GameProfile menuSkinProfile;
     private Supplier<PlayerSkin> menuSkinLookup;
 
@@ -58,6 +60,7 @@ public final class ReactionsConfigScreen extends Screen {
     @Override
     protected void init() {
         layoutButtonHeight = BUTTON_HEIGHT;
+        denseLayout = false;
         compactLayout = this.width < PANEL_WIDTH + MIN_FACE_SIZE + 48 || this.height < 220;
         if (compactLayout) {
             initCompact();
@@ -68,6 +71,7 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     private void initSideBySide(boolean denseLayout) {
+        this.denseLayout = denseLayout;
         int buttonHeight = denseLayout ? 16 : BUTTON_HEIGHT;
         int rowGap = denseLayout ? 3 : GAP;
         int sectionGap = denseLayout ? 6 : 14;
@@ -140,6 +144,7 @@ public final class ReactionsConfigScreen extends Screen {
         }).bounds(panelX, actionY, half, buttonHeight).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.reset"), button -> {
             ReactionsClientConfig.reset();
+            previewEyeSkinLayer = ReactionsClientConfig.get().eyeSkinLayer;
             mode = EditMode.LEFT_EYE;
             rebuildWidgets();
         }).bounds(panelX + half + GAP, actionY, half, buttonHeight).build());
@@ -219,6 +224,7 @@ public final class ReactionsConfigScreen extends Screen {
         }).bounds(panelX, bottomY, third, buttonHeight).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.reset"), button -> {
             ReactionsClientConfig.reset();
+            previewEyeSkinLayer = ReactionsClientConfig.get().eyeSkinLayer;
             mode = EditMode.LEFT_EYE;
             rebuildWidgets();
         }).bounds(panelX + third + GAP, bottomY, third, buttonHeight).build());
@@ -284,8 +290,7 @@ public final class ReactionsConfigScreen extends Screen {
 
     private void addEyeLayerButton(int x, int y, int width, int height) {
         addRenderableWidget(Button.builder(eyeLayerText(), button -> {
-            ReactionsClientConfig.get().eyeSkinLayer = ReactionsClientConfig.get().eyeSkinLayer.next();
-            ReactionsClientConfig.save();
+            previewEyeSkinLayer = previewEyeSkinLayer().next();
             rebuildWidgets();
         }).bounds(x, y, width, height).build());
     }
@@ -302,16 +307,17 @@ public final class ReactionsConfigScreen extends Screen {
             graphics.text(this.font, warning, this.width / 2 - this.font.width(warning) / 2, warningY, 0xFFFFD45A);
         }
 
+        ReactionsClientConfig.EyeSkinLayer previewLayer = previewEyeSkinLayer();
         Identifier texture = skinTexture();
-        drawSkinPreview(graphics, texture, config.eyeSkinLayer);
+        drawSkinPreview(graphics, texture, previewLayer);
         drawGrid(graphics);
-        drawEyeSelection(graphics, config.leftEyeX, config.leftEyeY, config.eyeWidth, config.eyeHeight, 0xFF43D17C);
-        drawEyeSelection(graphics, config.rightEyeX, config.rightEyeY, config.eyeWidth, config.eyeHeight, 0xFF4AA3FF);
-        drawMouthSelection(graphics, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY);
-        drawPixelMarker(graphics, config.eyelidColorX, config.eyelidColorY, 0xFFFFC94A);
+        drawEyeSelection(graphics, config.leftEyeX, config.leftEyeY, config.eyeWidth, config.eyeHeight, 0xFF43D17C, isLayerVisible(config.leftEyeSkinLayer, previewLayer));
+        drawEyeSelection(graphics, config.rightEyeX, config.rightEyeY, config.eyeWidth, config.eyeHeight, 0xFF4AA3FF, isLayerVisible(config.rightEyeSkinLayer, previewLayer));
+        drawMouthSelection(graphics, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, isLayerVisible(config.mouthSkinLayer, previewLayer));
+        drawPixelMarker(graphics, config.eyelidColorX, config.eyelidColorY, 0xFFFFC94A, isLayerVisible(config.eyelidColorSkinLayer, previewLayer));
 
         int labelY = faceY + faceSize + 8;
-        if (!compactLayout) {
+        if (!compactLayout && !denseLayout) {
             graphics.text(this.font, Component.translatable("gui.reactions.eye_size_value", config.eyeWidth, config.eyeHeight), faceX, labelY, 0xFFA0A0A0);
         }
         int rowTextOffset = Math.max(2, (layoutButtonHeight - 9) / 2);
@@ -340,17 +346,23 @@ public final class ReactionsConfigScreen extends Screen {
     private void applyFaceClick(int skinX, int skinY) {
         ReactionsClientConfig config = ReactionsClientConfig.get();
         if (mode == EditMode.LEFT_EYE) {
+            config.leftEyeSkinLayer = previewEyeSkinLayer();
             config.leftEyeX = skinX;
             config.leftEyeY = skinY;
+            syncLegacyEyeLayer(config);
         } else if (mode == EditMode.RIGHT_EYE) {
+            config.rightEyeSkinLayer = previewEyeSkinLayer();
             config.rightEyeX = skinX;
             config.rightEyeY = skinY;
+            syncLegacyEyeLayer(config);
         } else if (mode == EditMode.MOUTH) {
+            config.mouthSkinLayer = previewEyeSkinLayer();
             config.leftMouthX = clamp(skinX, FACE_U, FACE_U + FACE_PIXELS - MOUTH_PIXELS);
             config.leftMouthY = clamp(skinY, FACE_V, FACE_V + FACE_PIXELS - 1);
             config.rightMouthX = config.leftMouthX + 1;
             config.rightMouthY = config.leftMouthY;
         } else {
+            config.eyelidColorSkinLayer = previewEyeSkinLayer();
             config.eyelidColorX = skinX;
             config.eyelidColorY = skinY;
         }
@@ -374,43 +386,59 @@ public final class ReactionsConfigScreen extends Screen {
         }
     }
 
-    private void drawEyeSelection(GuiGraphicsExtractor graphics, int skinX, int skinY, int width, int height, int color) {
+    private void drawEyeSelection(GuiGraphicsExtractor graphics, int skinX, int skinY, int width, int height, int color, boolean activeLayer) {
         int x = faceX + (skinX - FACE_U) * pixelSize;
         int y = faceY + (skinY - FACE_V) * pixelSize;
         int w = width * pixelSize;
         int h = height * pixelSize;
-        graphics.fill(x, y, x + w, y + h, color & 0x55FFFFFF);
-        graphics.outline(x, y, w, h, color);
+        if (activeLayer) {
+            graphics.fill(x, y, x + w, y + h, color & 0x55FFFFFF);
+            graphics.outline(x, y, w, h, color);
+            return;
+        }
+
+        graphics.fill(x, y, x + w, y + h, color & 0x22FFFFFF);
+        graphics.outline(x, y, w, h, color & 0x99FFFFFF);
+        int inset = Math.max(1, pixelSize / 6);
+        if (w > inset * 2 && h > inset * 2) {
+            graphics.outline(x + inset, y + inset, w - inset * 2, h - inset * 2, 0xAAFFFFFF);
+        }
     }
 
-    private void drawMouthSelection(GuiGraphicsExtractor graphics, int leftSkinX, int leftSkinY, int rightSkinX, int rightSkinY) {
+    private void drawMouthSelection(GuiGraphicsExtractor graphics, int leftSkinX, int leftSkinY, int rightSkinX, int rightSkinY, boolean activeLayer) {
         if (!ReactionsClientConfig.get().showMouth) {
             return;
         }
         int color = 0xFFFFD45A;
-        drawPixelSelection(graphics, leftSkinX, leftSkinY, color);
-        drawPixelSelection(graphics, rightSkinX, rightSkinY, color);
+        drawPixelSelection(graphics, leftSkinX, leftSkinY, color, activeLayer);
+        drawPixelSelection(graphics, rightSkinX, rightSkinY, color, activeLayer);
     }
 
-    private void drawPixelSelection(GuiGraphicsExtractor graphics, int skinX, int skinY, int color) {
+    private void drawPixelSelection(GuiGraphicsExtractor graphics, int skinX, int skinY, int color, boolean activeLayer) {
         int x = faceX + (skinX - FACE_U) * pixelSize;
         int y = faceY + (skinY - FACE_V) * pixelSize;
         if (x < faceX || y < faceY || x >= faceX + faceSize || y >= faceY + faceSize) {
             return;
         }
-        graphics.fill(x, y, x + pixelSize, y + pixelSize, color & 0x66FFFFFF);
-        graphics.outline(x, y, pixelSize, pixelSize, color);
+        graphics.fill(x, y, x + pixelSize, y + pixelSize, color & (activeLayer ? 0x66FFFFFF : 0x22FFFFFF));
+        graphics.outline(x, y, pixelSize, pixelSize, color & (activeLayer ? 0xFFFFFFFF : 0x99FFFFFF));
+        if (!activeLayer) {
+            int inset = Math.max(1, pixelSize / 5);
+            if (pixelSize > inset * 2) {
+                graphics.outline(x + inset, y + inset, pixelSize - inset * 2, pixelSize - inset * 2, 0xAAFFFFFF);
+            }
+        }
     }
 
-    private void drawPixelMarker(GuiGraphicsExtractor graphics, int skinX, int skinY, int color) {
+    private void drawPixelMarker(GuiGraphicsExtractor graphics, int skinX, int skinY, int color, boolean activeLayer) {
         int x = faceX + (skinX - FACE_U) * pixelSize;
         int y = faceY + (skinY - FACE_V) * pixelSize;
         if (x < faceX || y < faceY || x >= faceX + faceSize || y >= faceY + faceSize) {
             return;
         }
         int inset = Math.max(3, pixelSize / 4);
-        graphics.fill(x + inset, y + inset, x + pixelSize - inset, y + pixelSize - inset, color);
-        graphics.outline(x + inset - 1, y + inset - 1, pixelSize - (inset - 1) * 2, pixelSize - (inset - 1) * 2, 0xFF000000);
+        graphics.fill(x + inset, y + inset, x + pixelSize - inset, y + pixelSize - inset, color & (activeLayer ? 0xFFFFFFFF : 0xAAFFFFFF));
+        graphics.outline(x + inset - 1, y + inset - 1, pixelSize - (inset - 1) * 2, pixelSize - (inset - 1) * 2, activeLayer ? 0xFF000000 : 0xAAFFFFFF);
     }
 
     private Identifier skinTexture() {
@@ -447,6 +475,19 @@ public final class ReactionsConfigScreen extends Screen {
         return mouseX >= faceX && mouseX < faceX + faceSize && mouseY >= faceY && mouseY < faceY + faceSize;
     }
 
+    private static boolean isLayerVisible(ReactionsClientConfig.EyeSkinLayer selectedLayer, ReactionsClientConfig.EyeSkinLayer previewLayer) {
+        ReactionsClientConfig.EyeSkinLayer resolvedLayer = selectedLayer == null ? ReactionsClientConfig.EyeSkinLayer.BASE : selectedLayer;
+        return resolvedLayer == previewLayer;
+    }
+
+    private static void syncLegacyEyeLayer(ReactionsClientConfig config) {
+        ReactionsClientConfig.EyeSkinLayer leftLayer = config.leftEyeSkinLayer == null ? config.eyeSkinLayer : config.leftEyeSkinLayer;
+        ReactionsClientConfig.EyeSkinLayer rightLayer = config.rightEyeSkinLayer == null ? config.eyeSkinLayer : config.rightEyeSkinLayer;
+        if (leftLayer == rightLayer && leftLayer != null) {
+            config.eyeSkinLayer = leftLayer;
+        }
+    }
+
     private Component enabledText() {
         return toggleText("gui.reactions.mod", ReactionsClientConfig.get().enabled);
     }
@@ -475,9 +516,19 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     private Component eyeLayerValueText() {
-        return Component.translatable(ReactionsClientConfig.get().eyeSkinLayer == ReactionsClientConfig.EyeSkinLayer.OUTER
+        return Component.translatable(previewEyeSkinLayer() == ReactionsClientConfig.EyeSkinLayer.OUTER
             ? "gui.reactions.eye_layer.outer"
             : "gui.reactions.eye_layer.base");
+    }
+
+    private ReactionsClientConfig.EyeSkinLayer previewEyeSkinLayer() {
+        if (previewEyeSkinLayer == null) {
+            previewEyeSkinLayer = ReactionsClientConfig.get().eyeSkinLayer;
+            if (previewEyeSkinLayer == null) {
+                previewEyeSkinLayer = ReactionsClientConfig.EyeSkinLayer.BASE;
+            }
+        }
+        return previewEyeSkinLayer;
     }
 
     private Component modeText(EditMode targetMode) {

@@ -23,7 +23,11 @@ public record RemoteEyeConfig(
     int eyelidTintIntensity,
     ReactionsClientConfig.DisabledEye disabledEye,
     boolean eyebrowsEnabled,
-    ReactionsClientConfig.EyeSkinLayer eyeSkinLayer
+    ReactionsClientConfig.EyeSkinLayer eyeSkinLayer,
+    ReactionsClientConfig.EyeSkinLayer leftEyeSkinLayer,
+    ReactionsClientConfig.EyeSkinLayer rightEyeSkinLayer,
+    ReactionsClientConfig.EyeSkinLayer mouthSkinLayer,
+    ReactionsClientConfig.EyeSkinLayer eyelidColorSkinLayer
 ) {
     public RemoteEyeConfig {
         eyeWidth = ReactionsClientConfig.clampEyeWidth(eyeWidth);
@@ -37,6 +41,18 @@ public record RemoteEyeConfig(
         }
         if (eyeSkinLayer == null) {
             eyeSkinLayer = ReactionsClientConfig.EyeSkinLayer.BASE;
+        }
+        if (leftEyeSkinLayer == null) {
+            leftEyeSkinLayer = eyeSkinLayer;
+        }
+        if (rightEyeSkinLayer == null) {
+            rightEyeSkinLayer = eyeSkinLayer;
+        }
+        if (mouthSkinLayer == null) {
+            mouthSkinLayer = ReactionsClientConfig.EyeSkinLayer.BASE;
+        }
+        if (eyelidColorSkinLayer == null) {
+            eyelidColorSkinLayer = ReactionsClientConfig.EyeSkinLayer.BASE;
         }
     }
 }

@@ -44,6 +44,10 @@ public final class ReactionsClientConfig {
     public boolean animateMouth = true;
     public DisabledEye disabledEye = DisabledEye.NONE;
     public EyeSkinLayer eyeSkinLayer = EyeSkinLayer.BASE;
+    public EyeSkinLayer leftEyeSkinLayer;
+    public EyeSkinLayer rightEyeSkinLayer;
+    public EyeSkinLayer mouthSkinLayer;
+    public EyeSkinLayer eyelidColorSkinLayer;
     public int leftEyeX = 9;
     public int leftEyeY = 12;
     public int rightEyeX = 13;
@@ -149,6 +153,18 @@ public final class ReactionsClientConfig {
         }
         if (eyeSkinLayer == null) {
             eyeSkinLayer = EyeSkinLayer.BASE;
+        }
+        if (leftEyeSkinLayer == null) {
+            leftEyeSkinLayer = eyeSkinLayer;
+        }
+        if (rightEyeSkinLayer == null) {
+            rightEyeSkinLayer = eyeSkinLayer;
+        }
+        if (mouthSkinLayer == null) {
+            mouthSkinLayer = EyeSkinLayer.BASE;
+        }
+        if (eyelidColorSkinLayer == null) {
+            eyelidColorSkinLayer = EyeSkinLayer.BASE;
         }
         eyeWidth = clampEyeWidth(eyeWidth);
         eyeHeight = clampEyeHeight(eyeHeight);
@@ -269,6 +285,10 @@ public final class ReactionsClientConfig {
         public int eyeHeight = 1;
         public DisabledEye disabledEye = DisabledEye.NONE;
         public EyeSkinLayer eyeSkinLayer = EyeSkinLayer.BASE;
+        public EyeSkinLayer leftEyeSkinLayer;
+        public EyeSkinLayer rightEyeSkinLayer;
+        public EyeSkinLayer mouthSkinLayer;
+        public EyeSkinLayer eyelidColorSkinLayer;
 
         private static PlayerOverride from(ReactionsClientConfig config) {
             PlayerOverride override = new PlayerOverride();
@@ -288,6 +308,10 @@ public final class ReactionsClientConfig {
             override.eyeHeight = config.eyeHeight;
             override.disabledEye = config.disabledEye;
             override.eyeSkinLayer = config.eyeSkinLayer;
+            override.leftEyeSkinLayer = config.leftEyeSkinLayer;
+            override.rightEyeSkinLayer = config.rightEyeSkinLayer;
+            override.mouthSkinLayer = config.mouthSkinLayer;
+            override.eyelidColorSkinLayer = config.eyelidColorSkinLayer;
             return override;
         }
 
@@ -297,6 +321,18 @@ public final class ReactionsClientConfig {
             }
             if (eyeSkinLayer == null) {
                 eyeSkinLayer = EyeSkinLayer.BASE;
+            }
+            if (leftEyeSkinLayer == null) {
+                leftEyeSkinLayer = eyeSkinLayer;
+            }
+            if (rightEyeSkinLayer == null) {
+                rightEyeSkinLayer = eyeSkinLayer;
+            }
+            if (mouthSkinLayer == null) {
+                mouthSkinLayer = EyeSkinLayer.BASE;
+            }
+            if (eyelidColorSkinLayer == null) {
+                eyelidColorSkinLayer = EyeSkinLayer.BASE;
             }
             eyeWidth = ReactionsClientConfig.clampEyeWidth(eyeWidth);
             eyeHeight = ReactionsClientConfig.clampEyeHeight(eyeHeight);

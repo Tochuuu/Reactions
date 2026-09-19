@@ -18,8 +18,8 @@ Real tokens should never be committed. `.env.publish` and `publish.local.propert
 
 ## Before publishing
 
-1. Update `RELEASE_CHANGELOG.md` with the changelog text you want users to see.
-2. Open GitHub Actions and run `Publish Mods` on the branch you want to publish.
+1. Open GitHub Actions and run `Publish Mods` on the branch you want to publish.
+2. Paste the changelog text into the `changelog` input when you are ready to publish. Dry runs can leave it empty.
 3. Keep `dry_run` enabled first. It builds the jars, prints the planned Modrinth/CurseForge metadata, and uploads the jars as an artifact without publishing.
 4. Run it again with `dry_run` disabled when the preview is correct.
 

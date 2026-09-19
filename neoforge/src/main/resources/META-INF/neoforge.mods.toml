@@ -9,7 +9,7 @@ version = "${version}"
 displayName = "Reactions"
 authors = "Tochuuu"
 description = '''A mod that adds dynamic expressions and facial personality to players.'''
-#logoFile = ""
+iconFile = "icon.png"
 displayTest = "IGNORE_ALL_VERSION"
 
 [[dependencies.reactions]]

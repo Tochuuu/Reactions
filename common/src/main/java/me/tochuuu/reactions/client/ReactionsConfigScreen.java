@@ -1,5 +1,6 @@
 package me.tochuuu.reactions.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -337,7 +338,7 @@ public final class ReactionsConfigScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == 0 && ReactionsClient.manualEyeKeysUnbound()) {
+        if (isLeftClick(event) && ReactionsClient.manualEyeKeysUnbound()) {
             updateManualWarningBounds(Component.translatable("gui.reactions.manual_eye_keys_unbound"));
             if (isInsideManualWarning(event.x(), event.y())) {
                 ReactionsClientConfig.save();
@@ -347,7 +348,7 @@ public final class ReactionsConfigScreen extends Screen {
                 return true;
             }
         }
-        if (event.button() == 0 && isInsideFace(event.x(), event.y())) {
+        if (isLeftClick(event) && isInsideFace(event.x(), event.y())) {
             int skinX = FACE_U + (int) ((event.x() - faceX) / pixelSize);
             int skinY = FACE_V + (int) ((event.y() - faceY) / pixelSize);
             applyFaceClick(skinX, skinY);
@@ -487,6 +488,10 @@ public final class ReactionsConfigScreen extends Screen {
 
     private boolean isInsideFace(double mouseX, double mouseY) {
         return mouseX >= faceX && mouseX < faceX + faceSize && mouseY >= faceY && mouseY < faceY + faceSize;
+    }
+
+    private static boolean isLeftClick(MouseButtonEvent event) {
+        return event.buttonInfo().button() == InputConstants.MOUSE_BUTTON_LEFT;
     }
 
     private void updateManualWarningBounds(Component warning) {

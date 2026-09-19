@@ -28,10 +28,10 @@ on:
         description: "CurseForge project id; blank uses CURSEFORGE_PROJECT_ID variable"
         required: false
         default: ""
-      changelog_file:
-        description: "Changelog file to publish"
-        required: true
-        default: "RELEASE_CHANGELOG.md"
+      changelog:
+        description: "Release changelog text"
+        required: false
+        default: ""
       publish_fabric:
         description: "Publish Fabric client jar"
         required: true
@@ -128,6 +128,17 @@ jobs:
             echo "SERVER_RELAY_JAR=fabric-server-relay/build/libs/Reactions-fabric-server-relay-$mod_version+$mc_version.jar"
           } >> "$GITHUB_ENV"
 
+      - name: Prepare changelog
+        shell: bash
+        env:
+          CHANGELOG_TEXT: ${{ inputs.changelog }}
+        run: |
+          set -euo pipefail
+
+          changelog_file="$RUNNER_TEMP/reactions-changelog.md"
+          printf '%s\n' "$CHANGELOG_TEXT" > "$changelog_file"
+          echo "CHANGELOG_FILE=$changelog_file" >> "$GITHUB_ENV"
+
       - name: Validate publish inputs
         if: ${{ inputs.dry_run == false }}
         shell: bash
@@ -154,13 +165,8 @@ jobs:
             exit 1
           fi
 
-          if [ ! -s "${{ inputs.changelog_file }}" ]; then
-            echo "Changelog file '${{ inputs.changelog_file }}' is missing or empty."
-            exit 1
-          fi
-
-          if grep -q 'Write the changelog for the next release here' "${{ inputs.changelog_file }}"; then
-            echo "Changelog file '${{ inputs.changelog_file }}' still contains the placeholder text."
+          if [ ! -s "$CHANGELOG_FILE" ]; then
+            echo "Changelog text is missing."
             exit 1
           fi
 
@@ -179,7 +185,7 @@ jobs:
           echo "Dry run: ${{ inputs.dry_run }}"
           echo "Mod version: $MOD_VERSION"
           echo "Minecraft version: $MC_VERSION"
-          echo "Changelog file: ${{ inputs.changelog_file }}"
+          echo "Changelog source: workflow input"
           echo
           echo "Artifacts:"
           ls -lh "$FABRIC_JAR" "$NEOFORGE_JAR" "$SERVER_RELAY_JAR"
@@ -215,7 +221,7 @@ jobs:
           name: ${{ env.MOD_VERSION }}
           version: ${{ env.MOD_VERSION }}
           version-type: beta
-          changelog-file: ${{ inputs.changelog_file }}
+          changelog-file: ${{ env.CHANGELOG_FILE }}
           loaders: fabric
           environment: client
           game-versions: ${{ env.MC_VERSION }}
@@ -232,7 +238,7 @@ jobs:
           name: ${{ env.MOD_VERSION }}
           version: ${{ env.MOD_VERSION }}
           version-type: beta
-          changelog-file: ${{ inputs.changelog_file }}
+          changelog-file: ${{ env.CHANGELOG_FILE }}
           loaders: neoforge
           environment: client | server
           game-versions: ${{ env.MC_VERSION }}
@@ -249,7 +255,7 @@ jobs:
           name: ${{ env.MOD_VERSION }}-server
           version: ${{ env.MOD_VERSION }}-server
           version-type: alpha
-          changelog-file: ${{ inputs.changelog_file }}
+          changelog-file: ${{ env.CHANGELOG_FILE }}
           loaders: fabric
           environment: server
           game-versions: ${{ env.MC_VERSION }}
@@ -266,7 +272,7 @@ jobs:
           name: Fabric ${{ env.MOD_VERSION }}
           version: ${{ env.MOD_VERSION }}
           version-type: release
-          changelog-file: ${{ inputs.changelog_file }}
+          changelog-file: ${{ env.CHANGELOG_FILE }}
           loaders: fabric
           environment: client
           game-versions: ${{ env.MC_VERSION }}
@@ -283,7 +289,7 @@ jobs:
           name: Neoforge ${{ env.MOD_VERSION }}
           version: ${{ env.MOD_VERSION }}
           version-type: release
-          changelog-file: ${{ inputs.changelog_file }}
+          changelog-file: ${{ env.CHANGELOG_FILE }}
           loaders: neoforge
           environment: client | server
           game-versions: ${{ env.MC_VERSION }}
@@ -300,7 +306,7 @@ jobs:
           name: Fabric Server Relay ${{ env.MOD_VERSION }}
           version: ${{ env.MOD_VERSION }}-server
           version-type: release
-          changelog-file: ${{ inputs.changelog_file }}
+          changelog-file: ${{ env.CHANGELOG_FILE }}
           loaders: fabric
           environment: server
           game-versions: ${{ env.MC_VERSION }}

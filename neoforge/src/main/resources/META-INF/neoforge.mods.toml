@@ -1,6 +1,6 @@
 modLoader = "javafml"
 loaderVersion = "[2,)"
-#issueTrackerURL = ""
+issueTrackerURL = "https://github.com/Tochuuu/Reactions/issues"
 license = "GNU GPL 3.0"
 
 [[mods]]
@@ -10,6 +10,7 @@ displayName = "Reactions"
 authors = "Tochuuu"
 description = '''A mod that adds dynamic expressions and facial personality to players.'''
 iconFile = "icon.png"
+displayURL = "https://modrinth.com/mod/playereactions"
 displayTest = "IGNORE_ALL_VERSION"
 
 [[dependencies.reactions]]

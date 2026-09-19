@@ -21,3 +21,4 @@
 # Local publishing secrets
 /.env.publish
 /publish.local.properties
+/local-publish/

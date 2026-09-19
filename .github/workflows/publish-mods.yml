@@ -1,0 +1,308 @@
+name: Publish Mods
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and preview only; do not publish"
+        required: true
+        default: true
+        type: boolean
+      mod_version:
+        description: "Override mod_version from gradle.properties"
+        required: false
+        default: ""
+      minecraft_version:
+        description: "Override minecraft_version from gradle.properties"
+        required: false
+        default: ""
+      java_version:
+        description: "Override Java version; blank uses 25 for 26.x and 21 otherwise"
+        required: false
+        default: ""
+      modrinth_project_id:
+        description: "Modrinth project id or slug; blank uses MODRINTH_PROJECT_ID variable"
+        required: false
+        default: "playereactions"
+      curseforge_project_id:
+        description: "CurseForge project id; blank uses CURSEFORGE_PROJECT_ID variable"
+        required: false
+        default: ""
+      changelog_file:
+        description: "Changelog file to publish"
+        required: true
+        default: "RELEASE_CHANGELOG.md"
+      publish_fabric:
+        description: "Publish Fabric client jar"
+        required: true
+        default: true
+        type: boolean
+      publish_neoforge:
+        description: "Publish NeoForge jar"
+        required: true
+        default: true
+        type: boolean
+      publish_fabric_server_relay:
+        description: "Publish Fabric server relay jar"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+      CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve Java version
+        id: java
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mc_version="${{ inputs.minecraft_version }}"
+          if [ -z "$mc_version" ]; then
+            mc_version="$(grep '^minecraft_version=' gradle.properties | cut -d= -f2-)"
+          fi
+
+          java_version="${{ inputs.java_version }}"
+          if [ -z "$java_version" ]; then
+            if [[ "$mc_version" == 26.* ]]; then
+              java_version="25"
+            else
+              java_version="21"
+            fi
+          fi
+
+          echo "version=$java_version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ steps.java.outputs.version }}
+
+      - name: Resolve publish metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Local gradle.properties can point to a Windows JDK path. GitHub Actions should use setup-java.
+          sed -i '/^org.gradle.java.home=/d' gradle.properties
+
+          mod_version="${{ inputs.mod_version }}"
+          if [ -z "$mod_version" ]; then
+            mod_version="$(grep '^mod_version=' gradle.properties | cut -d= -f2-)"
+          fi
+
+          mc_version="${{ inputs.minecraft_version }}"
+          if [ -z "$mc_version" ]; then
+            mc_version="$(grep '^minecraft_version=' gradle.properties | cut -d= -f2-)"
+          fi
+
+          modrinth_project_id="${{ inputs.modrinth_project_id }}"
+          if [ -z "$modrinth_project_id" ]; then
+            modrinth_project_id="${{ vars.MODRINTH_PROJECT_ID }}"
+          fi
+
+          curseforge_project_id="${{ inputs.curseforge_project_id }}"
+          if [ -z "$curseforge_project_id" ]; then
+            curseforge_project_id="${{ vars.CURSEFORGE_PROJECT_ID }}"
+          fi
+
+          {
+            echo "MOD_VERSION=$mod_version"
+            echo "MC_VERSION=$mc_version"
+            echo "MODRINTH_PROJECT_ID=$modrinth_project_id"
+            echo "CURSEFORGE_PROJECT_ID=$curseforge_project_id"
+            echo "FABRIC_JAR=fabric/build/libs/Reactions-fabric-$mod_version+$mc_version.jar"
+            echo "NEOFORGE_JAR=neoforge/build/libs/Reactions-neoforge-$mod_version+$mc_version.jar"
+            echo "SERVER_RELAY_JAR=fabric-server-relay/build/libs/Reactions-fabric-server-relay-$mod_version+$mc_version.jar"
+          } >> "$GITHUB_ENV"
+
+      - name: Validate publish inputs
+        if: ${{ inputs.dry_run == false }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${MODRINTH_TOKEN:-}" ]; then
+            echo "MODRINTH_TOKEN secret is missing."
+            exit 1
+          fi
+
+          if [ -z "${CURSEFORGE_TOKEN:-}" ]; then
+            echo "CURSEFORGE_TOKEN secret is missing."
+            exit 1
+          fi
+
+          if [ -z "${MODRINTH_PROJECT_ID:-}" ]; then
+            echo "Modrinth project id is missing."
+            exit 1
+          fi
+
+          if [ -z "${CURSEFORGE_PROJECT_ID:-}" ]; then
+            echo "CurseForge project id is missing."
+            exit 1
+          fi
+
+          if [ ! -s "${{ inputs.changelog_file }}" ]; then
+            echo "Changelog file '${{ inputs.changelog_file }}' is missing or empty."
+            exit 1
+          fi
+
+          if grep -q 'Write the changelog for the next release here' "${{ inputs.changelog_file }}"; then
+            echo "Changelog file '${{ inputs.changelog_file }}' still contains the placeholder text."
+            exit 1
+          fi
+
+      - name: Build publish jars
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew --no-daemon clean :fabric:build :neoforge:build :fabric-server-relay:build
+
+      - name: Preview publish plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Dry run: ${{ inputs.dry_run }}"
+          echo "Mod version: $MOD_VERSION"
+          echo "Minecraft version: $MC_VERSION"
+          echo "Changelog file: ${{ inputs.changelog_file }}"
+          echo
+          echo "Artifacts:"
+          ls -lh "$FABRIC_JAR" "$NEOFORGE_JAR" "$SERVER_RELAY_JAR"
+          echo
+          echo "Modrinth:"
+          echo "- Fabric: version $MOD_VERSION, beta, fabric, client"
+          echo "- NeoForge: version $MOD_VERSION, beta, neoforge, client | server"
+          echo "- Fabric server relay: version $MOD_VERSION-server, alpha, fabric, server"
+          echo
+          echo "CurseForge:"
+          echo "- Fabric: name Fabric $MOD_VERSION, release, fabric, client"
+          echo "- NeoForge: name Neoforge $MOD_VERSION, release, neoforge, client | server"
+          echo "- Fabric server relay: name Fabric Server Relay $MOD_VERSION, release, fabric, server"
+
+      - name: Upload preview artifacts
+        if: ${{ inputs.dry_run == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: reactions-${{ env.MOD_VERSION }}-${{ env.MC_VERSION }}
+          path: |
+            ${{ env.FABRIC_JAR }}
+            ${{ env.NEOFORGE_JAR }}
+            ${{ env.SERVER_RELAY_JAR }}
+          if-no-files-found: error
+
+      - name: Publish Fabric to Modrinth
+        if: ${{ inputs.dry_run == false && inputs.publish_fabric == true }}
+        uses: Kira-NT/mc-publish@v3
+        with:
+          modrinth-id: ${{ env.MODRINTH_PROJECT_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: ${{ env.FABRIC_JAR }}
+          name: ${{ env.MOD_VERSION }}
+          version: ${{ env.MOD_VERSION }}
+          version-type: beta
+          changelog-file: ${{ inputs.changelog_file }}
+          loaders: fabric
+          environment: client
+          game-versions: ${{ env.MC_VERSION }}
+          java: ${{ steps.java.outputs.version }}
+          fail-mode: fail
+
+      - name: Publish NeoForge to Modrinth
+        if: ${{ inputs.dry_run == false && inputs.publish_neoforge == true }}
+        uses: Kira-NT/mc-publish@v3
+        with:
+          modrinth-id: ${{ env.MODRINTH_PROJECT_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: ${{ env.NEOFORGE_JAR }}
+          name: ${{ env.MOD_VERSION }}
+          version: ${{ env.MOD_VERSION }}
+          version-type: beta
+          changelog-file: ${{ inputs.changelog_file }}
+          loaders: neoforge
+          environment: client | server
+          game-versions: ${{ env.MC_VERSION }}
+          java: ${{ steps.java.outputs.version }}
+          fail-mode: fail
+
+      - name: Publish Fabric server relay to Modrinth
+        if: ${{ inputs.dry_run == false && inputs.publish_fabric_server_relay == true }}
+        uses: Kira-NT/mc-publish@v3
+        with:
+          modrinth-id: ${{ env.MODRINTH_PROJECT_ID }}
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          files: ${{ env.SERVER_RELAY_JAR }}
+          name: ${{ env.MOD_VERSION }}-server
+          version: ${{ env.MOD_VERSION }}-server
+          version-type: alpha
+          changelog-file: ${{ inputs.changelog_file }}
+          loaders: fabric
+          environment: server
+          game-versions: ${{ env.MC_VERSION }}
+          java: ${{ steps.java.outputs.version }}
+          fail-mode: fail
+
+      - name: Publish Fabric to CurseForge
+        if: ${{ inputs.dry_run == false && inputs.publish_fabric == true }}
+        uses: Kira-NT/mc-publish@v3
+        with:
+          curseforge-id: ${{ env.CURSEFORGE_PROJECT_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          files: ${{ env.FABRIC_JAR }}
+          name: Fabric ${{ env.MOD_VERSION }}
+          version: ${{ env.MOD_VERSION }}
+          version-type: release
+          changelog-file: ${{ inputs.changelog_file }}
+          loaders: fabric
+          environment: client
+          game-versions: ${{ env.MC_VERSION }}
+          java: ${{ steps.java.outputs.version }}
+          fail-mode: fail
+
+      - name: Publish NeoForge to CurseForge
+        if: ${{ inputs.dry_run == false && inputs.publish_neoforge == true }}
+        uses: Kira-NT/mc-publish@v3
+        with:
+          curseforge-id: ${{ env.CURSEFORGE_PROJECT_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          files: ${{ env.NEOFORGE_JAR }}
+          name: Neoforge ${{ env.MOD_VERSION }}
+          version: ${{ env.MOD_VERSION }}
+          version-type: release
+          changelog-file: ${{ inputs.changelog_file }}
+          loaders: neoforge
+          environment: client | server
+          game-versions: ${{ env.MC_VERSION }}
+          java: ${{ steps.java.outputs.version }}
+          fail-mode: fail
+
+      - name: Publish Fabric server relay to CurseForge
+        if: ${{ inputs.dry_run == false && inputs.publish_fabric_server_relay == true }}
+        uses: Kira-NT/mc-publish@v3
+        with:
+          curseforge-id: ${{ env.CURSEFORGE_PROJECT_ID }}
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+          files: ${{ env.SERVER_RELAY_JAR }}
+          name: Fabric Server Relay ${{ env.MOD_VERSION }}
+          version: ${{ env.MOD_VERSION }}-server
+          version-type: release
+          changelog-file: ${{ inputs.changelog_file }}
+          loaders: fabric
+          environment: server
+          game-versions: ${{ env.MC_VERSION }}
+          java: ${{ steps.java.outputs.version }}
+          fail-mode: fail

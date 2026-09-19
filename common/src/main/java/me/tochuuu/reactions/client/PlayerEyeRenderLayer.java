@@ -37,6 +37,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final float EYEBROW_FACE_Z = -4.014F / 16.0F;
     private static final float MOUTH_COVER_FACE_Z = -4.018F / 16.0F;
     private static final float MOUTH_FACE_Z = -4.026F / 16.0F;
+    private static final float OUTER_HEAD_LAYER_Z_OFFSET = -0.55F / 16.0F;
+    private static final float OUTER_EYE_LAYER_Z_OFFSET = -0.0002F;
     private static final float EYE_UV_INSET = 0.24F;
     private static final float MOUTH_UV_INSET = 0.125F;
     private static final float ADVANCEMENT_MOUTH_TOP_EXTENSION = 0.001F;
@@ -165,17 +167,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             submitEyebrowAboveEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyeWidth, eyes.rightEyeSkinLayer, eyebrowVerticalOffset(rightEye, eyes.eyeWidth, eyes.eyeHeight, hurtSclera));
         }
         if (!eyes.disabledEye.disablesLeftEye()) {
-            submitEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.leftEyeSkinLayer, eyes.eyelidColorSkinLayer, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
+            submitLayeredEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.leftEyeSkinLayer, eyes.eyelidColorSkinLayer, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
         }
         if (!eyes.disabledEye.disablesRightEye()) {
-            submitEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.rightEyeSkinLayer, eyes.eyelidColorSkinLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
+            submitLayeredEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.rightEyeSkinLayer, eyes.eyelidColorSkinLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
         }
         if (emissiveRenderType != null) {
             if (!eyes.disabledEye.disablesLeftEye()) {
-                submitEmissiveEye(poseStack, collector, emissiveRenderType, eyes.leftEyeX, eyes.leftEyeY, eyes.eyeWidth, eyes.eyeHeight, eyes.leftEyeSkinLayer, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, fallingSurprise);
+                submitLayeredEmissiveEye(poseStack, collector, emissiveRenderType, eyes.leftEyeX, eyes.leftEyeY, eyes.eyeWidth, eyes.eyeHeight, eyes.leftEyeSkinLayer, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, fallingSurprise);
             }
             if (!eyes.disabledEye.disablesRightEye()) {
-                submitEmissiveEye(poseStack, collector, emissiveRenderType, eyes.rightEyeX, eyes.rightEyeY, eyes.eyeWidth, eyes.eyeHeight, eyes.rightEyeSkinLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, fallingSurprise);
+                submitLayeredEmissiveEye(poseStack, collector, emissiveRenderType, eyes.rightEyeX, eyes.rightEyeY, eyes.eyeWidth, eyes.eyeHeight, eyes.rightEyeSkinLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, fallingSurprise);
             }
         }
         if (mouthAnimationsEnabled && AdvancementMouthReaction.active(state.id)) {
@@ -217,6 +219,26 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         }
 
         model.head.translateAndRotate(poseStack);
+    }
+
+    private static void submitLayeredEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, ReactionsClientConfig.EyeSkinLayer eyelidColorSkinLayer, EyeExpression expression, EyeLook eyeLook, EyeSide side, boolean hurtSclera, boolean fallingSurprise, int eyelidColor, boolean texturedEyelids) {
+        if (eyeSkinLayer == ReactionsClientConfig.EyeSkinLayer.OUTER) {
+            poseStack.pushPose();
+            poseStack.translate(0.0F, 0.0F, OUTER_HEAD_LAYER_Z_OFFSET);
+            if (expression == EyeExpression.CLOSED) {
+                submitEye(poseStack, collector, renderType, light, overlay, skinX, skinY, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, eyeSkinLayer, eyelidColorSkinLayer, expression, eyeLook, side, hurtSclera, fallingSurprise, eyelidColor, texturedEyelids);
+                poseStack.popPose();
+                return;
+            }
+
+            submitEye(poseStack, collector, renderType, light, overlay, skinX, skinY, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, ReactionsClientConfig.EyeSkinLayer.BASE, eyelidColorSkinLayer, expression, eyeLook, side, hurtSclera, fallingSurprise, eyelidColor, texturedEyelids);
+            poseStack.translate(0.0F, 0.0F, OUTER_EYE_LAYER_Z_OFFSET);
+            submitEye(poseStack, collector, renderType, light, overlay, skinX, skinY, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, eyeSkinLayer, eyelidColorSkinLayer, expression, eyeLook, side, hurtSclera, fallingSurprise, eyelidColor, texturedEyelids);
+            poseStack.popPose();
+            return;
+        }
+
+        submitEye(poseStack, collector, renderType, light, overlay, skinX, skinY, eyelidColorX, eyelidColorY, eyeWidth, eyeHeight, eyeSkinLayer, eyelidColorSkinLayer, expression, eyeLook, side, hurtSclera, fallingSurprise, eyelidColor, texturedEyelids);
     }
 
     private static void submitEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, ReactionsClientConfig.EyeSkinLayer eyelidColorSkinLayer, EyeExpression expression, EyeLook eyeLook, EyeSide side, boolean hurtSclera, boolean fallingSurprise, int eyelidColor, boolean texturedEyelids) {
@@ -283,6 +305,20 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float v2 = (sourceY + eyeHeight) / SKIN_SIZE;
 
         collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, light, overlay, NORMAL_COLOR));
+    }
+
+    private static void submitLayeredEmissiveEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int skinX, int skinY, int eyeWidth, int eyeHeight, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, EyeExpression expression, EyeLook eyeLook, EyeSide side, boolean hurtSclera, boolean fallingSurprise) {
+        if (eyeSkinLayer == ReactionsClientConfig.EyeSkinLayer.OUTER && expression != EyeExpression.CLOSED) {
+            poseStack.pushPose();
+            poseStack.translate(0.0F, 0.0F, OUTER_HEAD_LAYER_Z_OFFSET);
+            submitEmissiveEye(poseStack, collector, renderType, skinX, skinY, eyeWidth, eyeHeight, ReactionsClientConfig.EyeSkinLayer.BASE, expression, eyeLook, side, hurtSclera, fallingSurprise);
+            poseStack.translate(0.0F, 0.0F, OUTER_EYE_LAYER_Z_OFFSET);
+            submitEmissiveEye(poseStack, collector, renderType, skinX, skinY, eyeWidth, eyeHeight, eyeSkinLayer, expression, eyeLook, side, hurtSclera, fallingSurprise);
+            poseStack.popPose();
+            return;
+        }
+
+        submitEmissiveEye(poseStack, collector, renderType, skinX, skinY, eyeWidth, eyeHeight, eyeSkinLayer, expression, eyeLook, side, hurtSclera, fallingSurprise);
     }
 
     private static void submitEmissiveEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int skinX, int skinY, int eyeWidth, int eyeHeight, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, EyeExpression expression, EyeLook eyeLook, EyeSide side, boolean hurtSclera, boolean fallingSurprise) {

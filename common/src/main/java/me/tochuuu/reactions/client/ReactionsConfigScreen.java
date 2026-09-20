@@ -316,10 +316,12 @@ public final class ReactionsConfigScreen extends Screen {
         Identifier texture = skinTexture();
         drawSkinPreview(graphics, texture, previewLayer);
         drawGrid(graphics);
-        drawEyeSelection(graphics, config.leftEyeX, config.leftEyeY, config.eyeWidth, config.eyeHeight, 0xFF43D17C, isLayerVisible(config.leftEyeSkinLayer, previewLayer));
-        drawEyeSelection(graphics, config.rightEyeX, config.rightEyeY, config.eyeWidth, config.eyeHeight, 0xFF4AA3FF, isLayerVisible(config.rightEyeSkinLayer, previewLayer));
-        drawMouthSelection(graphics, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, isLayerVisible(config.mouthSkinLayer, previewLayer));
-        drawPixelMarker(graphics, config.eyelidColorX, config.eyelidColorY, 0xFFFFC94A, isLayerVisible(config.eyelidColorSkinLayer, previewLayer));
+        if (selectionPixelsEnabled(config)) {
+            drawEyeSelection(graphics, config.leftEyeX, config.leftEyeY, config.eyeWidth, config.eyeHeight, 0xFF43D17C, isLayerVisible(config.leftEyeSkinLayer, previewLayer));
+            drawEyeSelection(graphics, config.rightEyeX, config.rightEyeY, config.eyeWidth, config.eyeHeight, 0xFF4AA3FF, isLayerVisible(config.rightEyeSkinLayer, previewLayer));
+            drawMouthSelection(graphics, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, isLayerVisible(config.mouthSkinLayer, previewLayer));
+            drawPixelMarker(graphics, config.eyelidColorX, config.eyelidColorY, 0xFFFFC94A, isLayerVisible(config.eyelidColorSkinLayer, previewLayer));
+        }
 
         int labelY = faceY + faceSize + 8;
         if (!compactLayout) {
@@ -348,7 +350,7 @@ public final class ReactionsConfigScreen extends Screen {
                 return true;
             }
         }
-        if (isLeftClick(event) && isInsideFace(event.x(), event.y())) {
+        if (isLeftClick(event) && selectionPixelsEnabled(ReactionsClientConfig.get()) && isInsideFace(event.x(), event.y())) {
             int skinX = FACE_U + (int) ((event.x() - faceX) / pixelSize);
             int skinY = FACE_V + (int) ((event.y() - faceY) / pixelSize);
             applyFaceClick(skinX, skinY);
@@ -511,6 +513,10 @@ public final class ReactionsConfigScreen extends Screen {
     private static boolean isLayerVisible(ReactionsClientConfig.EyeSkinLayer selectedLayer, ReactionsClientConfig.EyeSkinLayer previewLayer) {
         ReactionsClientConfig.EyeSkinLayer resolvedLayer = selectedLayer == null ? ReactionsClientConfig.EyeSkinLayer.BASE : selectedLayer;
         return resolvedLayer == previewLayer;
+    }
+
+    private static boolean selectionPixelsEnabled(ReactionsClientConfig config) {
+        return config.enabled && config.animateSelf;
     }
 
     private static void syncLegacyEyeLayer(ReactionsClientConfig config) {

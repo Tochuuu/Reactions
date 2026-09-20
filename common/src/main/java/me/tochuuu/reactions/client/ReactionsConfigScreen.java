@@ -331,12 +331,12 @@ public final class ReactionsConfigScreen extends Screen {
         int rowTextOffset = Math.max(2, (layoutButtonHeight - 9) / 2);
         Component eyeSizeText = Component.translatable("gui.reactions.eye_size");
         graphics.text(this.font, eyeSizeText, panelX + panelWidth / 2 - this.font.width(eyeSizeText) / 2, sizeHeaderY + 2, 0xFFA0A0A0);
+        if (sizeLimitMessageTicks > 0) {
+            Component sizeLimitText = Component.translatable("gui.reactions.eye_size_limit_reached");
+            graphics.text(this.font, sizeLimitText, panelX + panelWidth / 2 - this.font.width(sizeLimitText) / 2, sizeHeaderY + 12, 0xFFFF6060);
+        }
         graphics.text(this.font, Component.translatable("gui.reactions.eye_width", config.eyeWidth), panelX, eyeWidthRowY + rowTextOffset, 0xFFFFFFFF);
         graphics.text(this.font, Component.translatable("gui.reactions.eye_height", config.eyeHeight), panelX, eyeHeightRowY + rowTextOffset, 0xFFFFFFFF);
-
-        if (sizeLimitMessageTicks > 0) {
-            graphics.text(this.font, Component.translatable("gui.reactions.eye_size_limit_reached"), panelX, Math.min(this.height - 38, eyeHeightRowY + layoutButtonHeight + 4), 0xFFFF6060);
-        }
     }
 
     @Override

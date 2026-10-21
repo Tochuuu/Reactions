@@ -313,14 +313,19 @@ public final class ReactionsConfigScreen extends Screen {
         ResourceLocation texture = skinTexture();
         drawSkinPreview(graphics, texture, previewLayer);
         drawGrid(graphics);
-        drawEyeSelection(graphics, config.leftEyeX, config.leftEyeY, config.eyeWidth, config.eyeHeight, 0xFF43D17C, isLayerVisible(config.leftEyeSkinLayer, previewLayer));
-        drawEyeSelection(graphics, config.rightEyeX, config.rightEyeY, config.eyeWidth, config.eyeHeight, 0xFF4AA3FF, isLayerVisible(config.rightEyeSkinLayer, previewLayer));
-        drawMouthSelection(graphics, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, isLayerVisible(config.mouthSkinLayer, previewLayer));
-        drawPixelMarker(graphics, config.eyelidColorX, config.eyelidColorY, 0xFFFFC94A, isLayerVisible(config.eyelidColorSkinLayer, previewLayer));
+        if (selectionPixelsEnabled(config)) {
+            drawEyeSelection(graphics, config.leftEyeX, config.leftEyeY, config.eyeWidth, config.eyeHeight, 0xFF43D17C, isLayerVisible(config.leftEyeSkinLayer, previewLayer));
+            drawEyeSelection(graphics, config.rightEyeX, config.rightEyeY, config.eyeWidth, config.eyeHeight, 0xFF4AA3FF, isLayerVisible(config.rightEyeSkinLayer, previewLayer));
+            drawMouthSelection(graphics, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, isLayerVisible(config.mouthSkinLayer, previewLayer));
+            drawPixelMarker(graphics, config.eyelidColorX, config.eyelidColorY, 0xFFFFC94A, isLayerVisible(config.eyelidColorSkinLayer, previewLayer));
+        }
 
         int labelY = faceY + faceSize + 8;
         if (!compactLayout && !denseLayout) {
             graphics.drawString(this.font, Component.translatable("gui.reactions.eye_size_value", config.eyeWidth, config.eyeHeight), faceX, labelY, 0xFFA0A0A0);
+            if (sizeLimitMessageTicks > 0) {
+                graphics.drawString(this.font, Component.translatable("gui.reactions.eye_size_limit_reached"), faceX, labelY + 10, 0xFFFF6060);
+            }
         }
         int rowTextOffset = Math.max(2, (layoutButtonHeight - 9) / 2);
         Component eyeSizeText = Component.translatable("gui.reactions.eye_size");
@@ -328,9 +333,6 @@ public final class ReactionsConfigScreen extends Screen {
         graphics.drawString(this.font, Component.translatable("gui.reactions.eye_width", config.eyeWidth), panelX, eyeWidthRowY + rowTextOffset, 0xFFFFFFFF);
         graphics.drawString(this.font, Component.translatable("gui.reactions.eye_height", config.eyeHeight), panelX, eyeHeightRowY + rowTextOffset, 0xFFFFFFFF);
 
-        if (sizeLimitMessageTicks > 0) {
-            graphics.drawString(this.font, Component.translatable("gui.reactions.eye_size_limit_reached"), panelX, Math.min(this.height - 38, eyeHeightRowY + layoutButtonHeight + 4), 0xFFFF6060);
-        }
     }
 
     @Override
@@ -345,7 +347,7 @@ public final class ReactionsConfigScreen extends Screen {
                 return true;
             }
         }
-        if (button == 0 && isInsideFace(mouseX, mouseY)) {
+        if (button == 0 && selectionPixelsEnabled(ReactionsClientConfig.get()) && isInsideFace(mouseX, mouseY)) {
             int skinX = FACE_U + (int) ((mouseX - faceX) / pixelSize);
             int skinY = FACE_V + (int) ((mouseY - faceY) / pixelSize);
             applyFaceClick(skinX, skinY);
@@ -478,6 +480,10 @@ public final class ReactionsConfigScreen extends Screen {
             menuSkinTexture = minecraft.getSkinManager().getInsecureSkinLocation(profile);
         }
         return menuSkinTexture;
+    }
+
+    private static boolean selectionPixelsEnabled(ReactionsClientConfig config) {
+        return config.enabled && config.animateSelf;
     }
 
     private boolean isInsideFace(double mouseX, double mouseY) {

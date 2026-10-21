@@ -177,18 +177,18 @@ public final class ReactionsClient {
                     this.releaseGraceTicks = releaseGraceTicks;
                 } else if (this.releaseGraceTicks > 0) {
                     this.releaseGraceTicks--;
-                } else {
-                    active = false;
+                }
+                active = false;
+                if (this.releaseGraceTicks <= 0) {
                     doubleTapHold = false;
                     tripleTapHold = false;
-                    tapCount = 0;
                 }
             }
             wasDown = down;
         }
 
         private boolean active() {
-            return active;
+            return active || releaseGraceTicks > 0;
         }
     }
 }

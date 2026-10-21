@@ -163,8 +163,12 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         int overlay = eyelidTintEnabled ? OverlayTexture.pack(0.0F, state.hasRedOverlay) : OverlayTexture.NO_OVERLAY;
         int eyelidColor = eyelidColor(eyelidStyle.cleanEyelidColor, eyelidStyle.eyelidTintIntensity, eyes.eyeHeight);
         if (eyes.eyebrowsEnabled) {
-            submitEyebrowAboveEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyeWidth, eyes.leftEyeSkinLayer, eyebrowVerticalOffset(leftEye, eyes.eyeWidth, eyes.eyeHeight, hurtSclera));
-            submitEyebrowAboveEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyeWidth, eyes.rightEyeSkinLayer, eyebrowVerticalOffset(rightEye, eyes.eyeWidth, eyes.eyeHeight, hurtSclera));
+            if (!eyes.disabledEye.disablesLeftEye()) {
+                submitAnimatedEyebrow(poseStack, collector, renderType, light, overlay, eyes, eyes.leftEyeX, eyes.leftEyeY, eyes.leftEyeSkinLayer, leftEye, hurtSclera);
+            }
+            if (!eyes.disabledEye.disablesRightEye()) {
+                submitAnimatedEyebrow(poseStack, collector, renderType, light, overlay, eyes, eyes.rightEyeX, eyes.rightEyeY, eyes.rightEyeSkinLayer, rightEye, hurtSclera);
+            }
         }
         if (!eyes.disabledEye.disablesLeftEye()) {
             submitLayeredEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.leftEyeSkinLayer, eyes.eyelidColorSkinLayer, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
@@ -381,6 +385,22 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         collector.submitCustomGeometry(poseStack, renderType, (pose, vertexConsumer) -> quad(vertexConsumer, pose, dstX1, dstY1, dstX2, dstY2, u1, v1, u2, v2, FULL_BRIGHT_LIGHT, OverlayTexture.NO_OVERLAY, NORMAL_COLOR));
     }
 
+    private static void submitAnimatedEyebrow(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, EyeSettings eyes, int skinX, int skinY, ReactionsClientConfig.EyeSkinLayer layer, EyeExpression expression, boolean widened) {
+        float offset = eyebrowVerticalOffset(expression, eyes.eyeWidth, eyes.eyeHeight, widened);
+        if (offset == 0.0F || skinY < HEAD_FRONT_V + 2.0F) {
+            return;
+        }
+        poseStack.pushPose();
+        if (layer == ReactionsClientConfig.EyeSkinLayer.OUTER) {
+            poseStack.translate(0.0F, 0.0F, OUTER_HEAD_LAYER_Z_OFFSET);
+        }
+        float x = skinX - HEAD_FRONT_U - 4.0F;
+        float y = skinY - 1.0F - HEAD_FRONT_V - 8.0F;
+        submitEyelidTexture(poseStack, collector, renderType, light, overlay, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyelidColorSkinLayer, eyes.eyeWidth, 1, x, y, x + eyes.eyeWidth, y + 1.0F, NORMAL_COLOR, false);
+        submitEyebrowAboveEye(poseStack, collector, renderType, light, overlay, skinX, skinY, eyes.eyeWidth, layer, offset);
+        poseStack.popPose();
+    }
+
     private static void submitEyebrowAboveEye(PoseStack poseStack, SubmitNodeCollector collector, RenderType renderType, int light, int overlay, int skinX, int skinY, int eyebrowWidth, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, float dstYOffset) {
         int clampedWidth = ReactionsClientConfig.clampEyeWidth(eyebrowWidth);
         int baseSkinX = clamp(skinX, (int) HEAD_FRONT_U, (int) (HEAD_FRONT_U + 8.0F) - clampedWidth);
@@ -404,7 +424,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             return 0.0F;
         }
         boolean eyeExtendsUp = canUseBlockEyeAnimation(eyeWidth, eyeHeight) || shouldExtendSclera(eyeWidth, eyeHeight, true);
-        return eyeExtendsUp ? -HURT_SCLERA_EXTENSION : 0.0F;
+        return eyeExtendsUp ? -1.0F : 0.0F;
     }
 
     private record EyeSettings(int leftEyeX, int leftEyeY, int rightEyeX, int rightEyeY, boolean mouthEnabled, boolean eyebrowsEnabled, int leftMouthX, int leftMouthY, int rightMouthX, int rightMouthY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, ReactionsClientConfig.DisabledEye disabledEye, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, ReactionsClientConfig.EyeSkinLayer leftEyeSkinLayer, ReactionsClientConfig.EyeSkinLayer rightEyeSkinLayer, ReactionsClientConfig.EyeSkinLayer mouthSkinLayer, ReactionsClientConfig.EyeSkinLayer eyelidColorSkinLayer) {
@@ -830,7 +850,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         float width;
         float height;
         float offsetTicks = ageInTicks + seededOffset(entityId, 41, 6);
-        if (animation == PlayerActionAnimationState.MouthUseAnimation.EATING) {
+        if (animation == PlayerActionAnimationState.MouthUseAnimation.WHISTLING) {
+            width = 1.0F;
+            height = 1.0F;
+        } else if (animation == PlayerActionAnimationState.MouthUseAnimation.EATING) {
             int frame = Math.floorMod((int) offsetTicks / EATING_STOP_MOTION_STEP_TICKS, EATING_STOP_MOTION_FRAMES.length);
             width = EATING_STOP_MOTION_FRAMES[frame][0];
             height = EATING_STOP_MOTION_FRAMES[frame][1];

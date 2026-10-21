@@ -27,7 +27,13 @@ public final class ReactionsBetaAnimationsScreen extends Screen {
             rebuildWidgets();
         }).bounds(x, y, panelWidth, 20).build());
 
-        int backY = Math.min(Math.max(y + 28, this.height - 30), this.height - 24);
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.eyebrows"), onOff(ReactionsClientConfig.get().showEyebrows)), button -> {
+            ReactionsClientConfig.get().showEyebrows = !ReactionsClientConfig.get().showEyebrows;
+            ReactionsClientConfig.save();
+            rebuildWidgets();
+        }).bounds(x, y + 28, panelWidth, 20).build());
+
+        int backY = Math.min(Math.max(y + 56, this.height - 30), this.height - 24);
         addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.back"), button -> onClose()).bounds(this.width / 2 - 45, backY, 90, 20).build());
     }
 

@@ -4,6 +4,7 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.entity.state.PlayerRenderState;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.vehicle.AbstractBoat;
 import net.minecraft.world.item.ItemUseAnimation;
 
 import java.util.HashMap;
@@ -50,6 +51,9 @@ public final class PlayerActionAnimationState {
         }
         if (animation == ItemUseAnimation.DRINK) {
             return MouthUseAnimation.DRINKING;
+        }
+        if (animation == ItemUseAnimation.TOOT_HORN) {
+            return MouthUseAnimation.WHISTLING;
         }
         return MouthUseAnimation.NONE;
     }
@@ -123,7 +127,11 @@ public final class PlayerActionAnimationState {
         }
 
         Entity vehicle = player.getVehicle();
-        float referenceYaw = vehicle == null ? player.getYRot(partialTick) : vehicle.getYRot(partialTick);
+        // Being rideable via /ride alone does not make an entity a constrained mount.
+        if (vehicle == null || !(vehicle instanceof AbstractBoat) && vehicle.getControllingPassenger() == null) {
+            return 0.0F;
+        }
+        float referenceYaw = vehicle.getYRot(partialTick);
         float headYaw = Mth.rotLerp(partialTick, player.yHeadRotO, player.yHeadRot);
         return Mth.wrapDegrees(headYaw - referenceYaw);
     }
@@ -139,7 +147,8 @@ public final class PlayerActionAnimationState {
     public enum MouthUseAnimation {
         NONE,
         EATING,
-        DRINKING
+        DRINKING,
+        WHISTLING
     }
 
     public record Snapshot(MouthUseAnimation mouthUseAnimation, boolean fallingSurprise, boolean landingBlink, float mountedYawDelta) {

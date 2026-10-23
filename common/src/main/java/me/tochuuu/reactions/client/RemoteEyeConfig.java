@@ -27,7 +27,12 @@ public record RemoteEyeConfig(
     ReactionsClientConfig.EyeSkinLayer leftEyeSkinLayer,
     ReactionsClientConfig.EyeSkinLayer rightEyeSkinLayer,
     ReactionsClientConfig.EyeSkinLayer mouthSkinLayer,
-    ReactionsClientConfig.EyeSkinLayer eyelidColorSkinLayer
+    ReactionsClientConfig.EyeSkinLayer eyelidColorSkinLayer,
+    boolean separateEyelidColors,
+    int rightEyelidColorX,
+    int rightEyelidColorY,
+    ReactionsClientConfig.EyeSkinLayer rightEyelidColorSkinLayer,
+    boolean rightEyelidIsMain
 ) {
     public RemoteEyeConfig {
         eyeWidth = ReactionsClientConfig.clampEyeWidth(eyeWidth);
@@ -53,6 +58,11 @@ public record RemoteEyeConfig(
         }
         if (eyelidColorSkinLayer == null) {
             eyelidColorSkinLayer = ReactionsClientConfig.EyeSkinLayer.BASE;
+        }
+        rightEyelidColorX = Math.max(0, Math.min(63, rightEyelidColorX));
+        rightEyelidColorY = Math.max(0, Math.min(63, rightEyelidColorY));
+        if (rightEyelidColorSkinLayer == null) {
+            rightEyelidColorSkinLayer = eyelidColorSkinLayer;
         }
     }
 }

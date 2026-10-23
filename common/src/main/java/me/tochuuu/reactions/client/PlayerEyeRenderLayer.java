@@ -75,7 +75,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final float BLOCK_FOCUS_EYE_THRESHOLD = 0.25F;
     private static final float MOUNTED_BACK_LOOK_THRESHOLD = 75.0F;
     private static final int FULL_BRIGHT_LIGHT = 0x00F000F0;
-    private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, false, 11, 14, 12, 14, 10, 11, 2, 1, ReactionsClientConfig.DisabledEye.NONE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE);
+    private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, false, 11, 14, 12, 14, 10, 11, 2, 1, ReactionsClientConfig.DisabledEye.NONE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, false, 10, 11, ReactionsClientConfig.EyeSkinLayer.BASE, false);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> DAMAGE_REACTIONS = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> LAST_DAMAGE_REACTIONS = new java.util.HashMap<>();
@@ -174,7 +174,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             submitLayeredEye(poseStack, collector, renderType, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.leftEyeSkinLayer, eyes.eyelidColorSkinLayer, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
         }
         if (!eyes.disabledEye.disablesRightEye()) {
-            submitLayeredEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.rightEyeSkinLayer, eyes.eyelidColorSkinLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
+            int colorX = eyes.separateEyelidColors ? eyes.rightEyelidColorX : eyes.eyelidColorX;
+            int colorY = eyes.separateEyelidColors ? eyes.rightEyelidColorY : eyes.eyelidColorY;
+            ReactionsClientConfig.EyeSkinLayer colorLayer = eyes.separateEyelidColors ? eyes.rightEyelidColorSkinLayer : eyes.eyelidColorSkinLayer;
+            submitLayeredEye(poseStack, collector, renderType, light, overlay, eyes.rightEyeX, eyes.rightEyeY, colorX, colorY, eyes.eyeWidth, eyes.eyeHeight, eyes.rightEyeSkinLayer, colorLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, fallingSurprise, eyelidColor, eyelidStyle.texturedEyelids);
         }
         if (emissiveRenderType != null) {
             if (!eyes.disabledEye.disablesLeftEye()) {
@@ -396,7 +399,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         }
         float x = skinX - HEAD_FRONT_U - 4.0F;
         float y = skinY - 1.0F - HEAD_FRONT_V - 8.0F;
-        submitEyelidTexture(poseStack, collector, renderType, light, overlay, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyelidColorSkinLayer, eyes.eyeWidth, 1, x, y, x + eyes.eyeWidth, y + 1.0F, NORMAL_COLOR, false);
+        // Covers use the chosen main skin color, not each eye's eyelid color.
+        boolean useRightColor = eyes.separateEyelidColors && eyes.rightEyelidIsMain;
+        int colorX = useRightColor ? eyes.rightEyelidColorX : eyes.eyelidColorX;
+        int colorY = useRightColor ? eyes.rightEyelidColorY : eyes.eyelidColorY;
+        ReactionsClientConfig.EyeSkinLayer colorLayer = useRightColor ? eyes.rightEyelidColorSkinLayer : eyes.eyelidColorSkinLayer;
+        // The widened sclera already covers the bottom of the original eyebrow row.
+        float coverBottom = y + 1.0F - HURT_SCLERA_EXTENSION;
+        if (coverBottom > y) {
+            int sourceX = ReactionsClientConfig.eyeSourceX(colorX, colorLayer);
+            submitEyePiece(poseStack, collector, renderType, light, overlay, sourceX, clamp(colorY, 0, (int) SKIN_SIZE - 1), 1.0F, 1.0F, x, y, x + eyes.eyeWidth, coverBottom, NORMAL_COLOR);
+        }
         submitEyebrowAboveEye(poseStack, collector, renderType, light, overlay, skinX, skinY, eyes.eyeWidth, layer, offset);
         poseStack.popPose();
     }
@@ -427,17 +440,17 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return eyeExtendsUp ? -1.0F : 0.0F;
     }
 
-    private record EyeSettings(int leftEyeX, int leftEyeY, int rightEyeX, int rightEyeY, boolean mouthEnabled, boolean eyebrowsEnabled, int leftMouthX, int leftMouthY, int rightMouthX, int rightMouthY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, ReactionsClientConfig.DisabledEye disabledEye, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, ReactionsClientConfig.EyeSkinLayer leftEyeSkinLayer, ReactionsClientConfig.EyeSkinLayer rightEyeSkinLayer, ReactionsClientConfig.EyeSkinLayer mouthSkinLayer, ReactionsClientConfig.EyeSkinLayer eyelidColorSkinLayer) {
+    private record EyeSettings(int leftEyeX, int leftEyeY, int rightEyeX, int rightEyeY, boolean mouthEnabled, boolean eyebrowsEnabled, int leftMouthX, int leftMouthY, int rightMouthX, int rightMouthY, int eyelidColorX, int eyelidColorY, int eyeWidth, int eyeHeight, ReactionsClientConfig.DisabledEye disabledEye, ReactionsClientConfig.EyeSkinLayer eyeSkinLayer, ReactionsClientConfig.EyeSkinLayer leftEyeSkinLayer, ReactionsClientConfig.EyeSkinLayer rightEyeSkinLayer, ReactionsClientConfig.EyeSkinLayer mouthSkinLayer, ReactionsClientConfig.EyeSkinLayer eyelidColorSkinLayer, boolean separateEyelidColors, int rightEyelidColorX, int rightEyelidColorY, ReactionsClientConfig.EyeSkinLayer rightEyelidColorSkinLayer, boolean rightEyelidIsMain) {
         private static EyeSettings local(ReactionsClientConfig config) {
-            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.showMouth, config.showEyebrows, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight, config.disabledEye, config.eyeSkinLayer, config.leftEyeSkinLayer, config.rightEyeSkinLayer, config.mouthSkinLayer, config.eyelidColorSkinLayer);
+            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.showMouth, config.showEyebrows, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight, config.disabledEye, config.eyeSkinLayer, config.leftEyeSkinLayer, config.rightEyeSkinLayer, config.mouthSkinLayer, config.eyelidColorSkinLayer, config.separateEyelidColors, config.rightEyelidColorX, config.rightEyelidColorY, config.rightEyelidColorSkinLayer, config.rightEyelidIsMain);
         }
 
         private static EyeSettings remote(RemoteEyeConfig config) {
-            return new EyeSettings(config.leftEyeX(), config.leftEyeY(), config.rightEyeX(), config.rightEyeY(), config.mouthEnabled(), config.eyebrowsEnabled(), config.leftMouthX(), config.leftMouthY(), config.rightMouthX(), config.rightMouthY(), config.eyelidColorX(), config.eyelidColorY(), config.eyeWidth(), config.eyeHeight(), config.disabledEye(), config.eyeSkinLayer(), config.leftEyeSkinLayer(), config.rightEyeSkinLayer(), config.mouthSkinLayer(), config.eyelidColorSkinLayer());
+            return new EyeSettings(config.leftEyeX(), config.leftEyeY(), config.rightEyeX(), config.rightEyeY(), config.mouthEnabled(), config.eyebrowsEnabled(), config.leftMouthX(), config.leftMouthY(), config.rightMouthX(), config.rightMouthY(), config.eyelidColorX(), config.eyelidColorY(), config.eyeWidth(), config.eyeHeight(), config.disabledEye(), config.eyeSkinLayer(), config.leftEyeSkinLayer(), config.rightEyeSkinLayer(), config.mouthSkinLayer(), config.eyelidColorSkinLayer(), config.separateEyelidColors(), config.rightEyelidColorX(), config.rightEyelidColorY(), config.rightEyelidColorSkinLayer(), config.rightEyelidIsMain());
         }
 
         private static EyeSettings override(ReactionsClientConfig.PlayerOverride config) {
-            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.showMouth, config.showEyebrows, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight, config.disabledEye, config.eyeSkinLayer, config.leftEyeSkinLayer, config.rightEyeSkinLayer, config.mouthSkinLayer, config.eyelidColorSkinLayer);
+            return new EyeSettings(config.leftEyeX, config.leftEyeY, config.rightEyeX, config.rightEyeY, config.showMouth, config.showEyebrows, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, config.eyelidColorX, config.eyelidColorY, config.eyeWidth, config.eyeHeight, config.disabledEye, config.eyeSkinLayer, config.leftEyeSkinLayer, config.rightEyeSkinLayer, config.mouthSkinLayer, config.eyelidColorSkinLayer, config.separateEyelidColors, config.rightEyelidColorX, config.rightEyelidColorY, config.rightEyelidColorSkinLayer, config.rightEyelidIsMain);
         }
 
         private static EyeSettings defaults() {

@@ -684,6 +684,11 @@ public final class ReactionsNetworking {
         buf.writeByte(config.rightEyeSkinLayer().ordinal());
         buf.writeByte(config.mouthSkinLayer().ordinal());
         buf.writeByte(config.eyelidColorSkinLayer().ordinal());
+        buf.writeBoolean(config.separateEyelidColors());
+        buf.writeByte(config.rightEyelidColorX());
+        buf.writeByte(config.rightEyelidColorY());
+        buf.writeByte(config.rightEyelidColorSkinLayer().ordinal());
+        buf.writeBoolean(config.rightEyelidIsMain());
     }
 
     private static RemoteEyeConfig readUpdateBody(RegistryFriendlyByteBuf buf) {
@@ -694,6 +699,10 @@ public final class ReactionsNetworking {
         int rightEyeX = buf.readUnsignedByte();
         int rightEyeY = buf.readUnsignedByte();
         if (buf.readableBytes() <= 4) {
+            int eyelidColorX = buf.readUnsignedByte();
+            int eyelidColorY = buf.readUnsignedByte();
+            int eyeWidth = buf.readUnsignedByte();
+            int eyeHeight = buf.readUnsignedByte();
             return new RemoteEyeConfig(
                 playerId,
                 entityId,
@@ -706,10 +715,10 @@ public final class ReactionsNetworking {
                 14,
                 12,
                 14,
-                buf.readUnsignedByte(),
-                buf.readUnsignedByte(),
-                buf.readUnsignedByte(),
-                buf.readUnsignedByte(),
+                eyelidColorX,
+                eyelidColorY,
+                eyeWidth,
+                eyeHeight,
                 ReactionsClientConfig.DEFAULT_CLEAN_EYELID_COLOR,
                 ReactionsClientConfig.DEFAULT_TEXTURED_EYELIDS,
                 ReactionsClientConfig.DEFAULT_EYELID_TINT_INTENSITY,
@@ -719,7 +728,12 @@ public final class ReactionsNetworking {
                 ReactionsClientConfig.EyeSkinLayer.BASE,
                 ReactionsClientConfig.EyeSkinLayer.BASE,
                 ReactionsClientConfig.EyeSkinLayer.BASE,
-                ReactionsClientConfig.EyeSkinLayer.BASE
+                ReactionsClientConfig.EyeSkinLayer.BASE,
+                false,
+                eyelidColorX,
+                eyelidColorY,
+                ReactionsClientConfig.EyeSkinLayer.BASE,
+                false
             );
         }
 
@@ -766,6 +780,18 @@ public final class ReactionsNetworking {
         if (buf.readableBytes() >= 1) {
             eyelidColorSkinLayer = ReactionsClientConfig.EyeSkinLayer.fromNetwork(buf.readUnsignedByte());
         }
+        boolean separateEyelidColors = false;
+        int rightEyelidColorX = eyelidColorX;
+        int rightEyelidColorY = eyelidColorY;
+        ReactionsClientConfig.EyeSkinLayer rightEyelidColorSkinLayer = eyelidColorSkinLayer;
+        boolean rightEyelidIsMain = false;
+        if (buf.readableBytes() >= 5) {
+            separateEyelidColors = buf.readBoolean();
+            rightEyelidColorX = buf.readUnsignedByte();
+            rightEyelidColorY = buf.readUnsignedByte();
+            rightEyelidColorSkinLayer = ReactionsClientConfig.EyeSkinLayer.fromNetwork(buf.readUnsignedByte());
+            rightEyelidIsMain = buf.readBoolean();
+        }
 
         return new RemoteEyeConfig(
             playerId,
@@ -792,7 +818,12 @@ public final class ReactionsNetworking {
             leftEyeSkinLayer,
             rightEyeSkinLayer,
             mouthSkinLayer,
-            eyelidColorSkinLayer
+            eyelidColorSkinLayer,
+            separateEyelidColors,
+            rightEyelidColorX,
+            rightEyelidColorY,
+            rightEyelidColorSkinLayer,
+            rightEyelidIsMain
         );
     }
 
@@ -823,7 +854,12 @@ public final class ReactionsNetworking {
             config.leftEyeSkinLayer,
             config.rightEyeSkinLayer,
             config.mouthSkinLayer,
-            config.eyelidColorSkinLayer
+            config.eyelidColorSkinLayer,
+            config.separateEyelidColors,
+            config.rightEyelidColorX,
+            config.rightEyelidColorY,
+            config.rightEyelidColorSkinLayer,
+            config.rightEyelidIsMain
         );
     }
 
@@ -861,7 +897,12 @@ public final class ReactionsNetworking {
             config.leftEyeSkinLayer(),
             config.rightEyeSkinLayer(),
             config.mouthSkinLayer(),
-            config.eyelidColorSkinLayer()
+            config.eyelidColorSkinLayer(),
+            config.separateEyelidColors(),
+            config.rightEyelidColorX(),
+            config.rightEyelidColorY(),
+            config.rightEyelidColorSkinLayer(),
+            config.rightEyelidIsMain()
         );
     }
 

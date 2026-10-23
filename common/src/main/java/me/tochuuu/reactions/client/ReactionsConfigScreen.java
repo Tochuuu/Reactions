@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
@@ -61,6 +62,9 @@ public final class ReactionsConfigScreen extends Screen {
 
     @Override
     protected void init() {
+        if (!ReactionsClientConfig.get().separateEyelidColors && mode == EditMode.RIGHT_EYEDROPPER) {
+            mode = EditMode.EYEDROPPER;
+        }
         layoutButtonHeight = BUTTON_HEIGHT;
         denseLayout = false;
         compactLayout = this.width < PANEL_WIDTH + MIN_FACE_SIZE + 48 || this.height < 220;
@@ -125,7 +129,7 @@ public final class ReactionsConfigScreen extends Screen {
 
         y += buttonHeight + rowGap;
         addModeButton(EditMode.MOUTH, panelX, y, half, buttonHeight);
-        addModeButton(EditMode.EYEDROPPER, panelX + half + GAP, y, half, buttonHeight);
+        addEyelidColorButtons(panelX + half + GAP, y, half, buttonHeight);
 
         y += buttonHeight + sectionGap;
         sizeHeaderY = y - Math.max(4, sectionGap);
@@ -196,7 +200,7 @@ public final class ReactionsConfigScreen extends Screen {
 
         y += buttonHeight + rowGap;
         addModeButton(EditMode.MOUTH, panelX, y, half, buttonHeight);
-        addModeButton(EditMode.EYEDROPPER, panelX + half + GAP, y, half, buttonHeight);
+        addEyelidColorButtons(panelX + half + GAP, y, half, buttonHeight);
 
         y += buttonHeight + rowGap;
         addToggle(panelX, y, half, selfAnimationText(), () -> ReactionsClientConfig.get().animateSelf = !ReactionsClientConfig.get().animateSelf, buttonHeight);
@@ -257,6 +261,24 @@ public final class ReactionsConfigScreen extends Screen {
             mode = targetMode;
             rebuildWidgets();
         }).bounds(x, y, width, height).build());
+    }
+
+    private void addEyelidColorButtons(int x, int y, int width, int height) {
+        if (!ReactionsClientConfig.get().separateEyelidColors) {
+            addModeButton(EditMode.EYEDROPPER, x, y, width, height);
+            return;
+        }
+        int half = (width - 4) / 2;
+        addRenderableWidget(Button.builder(modeText(EditMode.EYEDROPPER), button -> {
+            mode = EditMode.EYEDROPPER;
+            rebuildWidgets();
+        }).bounds(x, y, half, height)
+            .tooltip(Tooltip.create(Component.translatable("gui.reactions.edit.left_eyelid"))).build());
+        addRenderableWidget(Button.builder(modeText(EditMode.RIGHT_EYEDROPPER), button -> {
+            mode = EditMode.RIGHT_EYEDROPPER;
+            rebuildWidgets();
+        }).bounds(x + half + 4, y, width - half - 4, height)
+            .tooltip(Tooltip.create(Component.translatable("gui.reactions.edit.right_eyelid"))).build());
     }
 
     private void addSizeButton(int x, int y, boolean width, int delta) {
@@ -320,6 +342,9 @@ public final class ReactionsConfigScreen extends Screen {
             drawEyeSelection(graphics, config.rightEyeX, config.rightEyeY, config.eyeWidth, config.eyeHeight, 0xFF4AA3FF, isLayerVisible(config.rightEyeSkinLayer, previewLayer));
             drawMouthSelection(graphics, config.leftMouthX, config.leftMouthY, config.rightMouthX, config.rightMouthY, isLayerVisible(config.mouthSkinLayer, previewLayer));
             drawPixelMarker(graphics, config.eyelidColorX, config.eyelidColorY, 0xFFFFC94A, isLayerVisible(config.eyelidColorSkinLayer, previewLayer));
+            if (config.separateEyelidColors) {
+                drawPixelMarker(graphics, config.rightEyelidColorX, config.rightEyelidColorY, 0xFFFF8AC5, isLayerVisible(config.rightEyelidColorSkinLayer, previewLayer));
+            }
         }
 
         int labelY = faceY + faceSize + 8;
@@ -376,6 +401,10 @@ public final class ReactionsConfigScreen extends Screen {
             config.leftMouthY = clamp(skinY, FACE_V, FACE_V + FACE_PIXELS - 1);
             config.rightMouthX = config.leftMouthX + 1;
             config.rightMouthY = config.leftMouthY;
+        } else if (mode == EditMode.RIGHT_EYEDROPPER && config.separateEyelidColors) {
+            config.rightEyelidColorSkinLayer = previewEyeSkinLayer();
+            config.rightEyelidColorX = skinX;
+            config.rightEyelidColorY = skinY;
         } else {
             config.eyelidColorSkinLayer = previewEyeSkinLayer();
             config.eyelidColorX = skinX;
@@ -565,7 +594,11 @@ public final class ReactionsConfigScreen extends Screen {
     }
 
     private Component modeText(EditMode targetMode) {
-        Component label = Component.translatable(compactLayout ? targetMode.shortLabelKey : targetMode.labelKey);
+        String labelKey = compactLayout ? targetMode.shortLabelKey : targetMode.labelKey;
+        if (targetMode == EditMode.EYEDROPPER && ReactionsClientConfig.get().separateEyelidColors) {
+            labelKey = "gui.reactions.edit.left_eyelid.short";
+        }
+        Component label = Component.translatable(labelKey);
         return mode == targetMode ? Component.translatable("gui.reactions.selected", label) : label;
     }
 
@@ -611,7 +644,8 @@ public final class ReactionsConfigScreen extends Screen {
         LEFT_EYE("gui.reactions.edit.left_eye", "gui.reactions.edit.left_eye.short", 0xFF43D17C),
         RIGHT_EYE("gui.reactions.edit.right_eye", "gui.reactions.edit.right_eye.short", 0xFF4AA3FF),
         MOUTH("gui.reactions.edit.mouth", "gui.reactions.edit.mouth", 0xFFFFD45A),
-        EYEDROPPER("gui.reactions.edit.eyelid_color", "gui.reactions.edit.eyelid_color.short", 0xFFFFC94A);
+        EYEDROPPER("gui.reactions.edit.eyelid_color", "gui.reactions.edit.eyelid_color.short", 0xFFFFC94A),
+        RIGHT_EYEDROPPER("gui.reactions.edit.right_eyelid.short", "gui.reactions.edit.right_eyelid.short", 0xFFFF8AC5);
 
         private final String labelKey;
         private final String shortLabelKey;

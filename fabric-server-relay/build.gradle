@@ -1,6 +1,14 @@
-architectury {
-    platformSetupLoomIde()
-    fabric()
+// The standalone relay does not need Architectury's runtime transformer.
+loom {
+    runs {
+        server {
+            // Keep the shared Gradle launch configuration when refreshing the IDE.
+            ideConfigGenerated false
+            vmArg '-Xms512m'
+            vmArg '-Xmx2G'
+            programArgs '--world', "world-${rootProject.minecraft_version}"
+        }
+    }
 }
 
 dependencies {

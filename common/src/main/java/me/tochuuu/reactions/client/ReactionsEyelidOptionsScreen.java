@@ -5,6 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.resources.PlayerSkin;
 import net.minecraft.client.renderer.RenderType;
@@ -53,7 +54,7 @@ public final class ReactionsEyelidOptionsScreen extends Screen {
         int panelWidth = Math.max(1, Math.min(PANEL_WIDTH, this.width - sideMargin * 2));
         int topMargin = veryCompact ? 18 : 30;
         int bottomMargin = 6;
-        int controlHeight = buttonHeight * 3 + gap * 2;
+        int controlHeight = buttonHeight * 4 + gap * 3;
         int availablePreviewHeight = Math.max(16, this.height - topMargin - bottomMargin - controlHeight - previewGap);
 
         previewPixelSize = Math.max(2, Math.min(Math.min(compact ? 6 : 8, (this.width - 24) / FACE_PIXELS), availablePreviewHeight / FACE_PIXELS));
@@ -90,6 +91,24 @@ public final class ReactionsEyelidOptionsScreen extends Screen {
         EyelidTintSlider slider = new EyelidTintSlider(x, y, panelWidth, buttonHeight, config.eyelidTintIntensity);
         slider.active = !config.cleanEyelidColor;
         addRenderableWidget(slider);
+
+        y += buttonHeight + gap;
+        addRenderableWidget(Button.builder(separateColorsText(), button -> {
+            config.separateEyelidColors = !config.separateEyelidColors;
+            ReactionsClientConfig.save();
+            triggerButtonBlink();
+            rebuildWidgets();
+        }).bounds(x, y, half, buttonHeight)
+            .tooltip(Tooltip.create(Component.translatable("gui.reactions.separate_eyelid_colors.tooltip"))).build());
+        Button mainColorButton = Button.builder(mainColorText(), button -> {
+            config.rightEyelidIsMain = !config.rightEyelidIsMain;
+            ReactionsClientConfig.save();
+            triggerButtonBlink();
+            rebuildWidgets();
+        }).bounds(x + half + gap, y, rightWidth, buttonHeight)
+            .tooltip(Tooltip.create(Component.translatable("gui.reactions.main_eyelid_color.tooltip"))).build();
+        mainColorButton.active = config.separateEyelidColors;
+        addRenderableWidget(mainColorButton);
 
         y += buttonHeight + gap;
         int backWidth = Math.min(90, panelWidth);
@@ -131,31 +150,38 @@ public final class ReactionsEyelidOptionsScreen extends Screen {
     private void drawPreview(GuiGraphics graphics, ResourceLocation texture, ReactionsClientConfig config, boolean closed) {
         graphics.blit(RenderType::guiTextured, texture, previewX, previewY, FACE_U, FACE_V, previewSize, previewSize, FACE_PIXELS, FACE_PIXELS, SKIN_SIZE, SKIN_SIZE);
         if (closed) {
-            drawClosedEye(graphics, texture, config.leftEyeX, config.leftEyeY, config);
-            drawClosedEye(graphics, texture, config.rightEyeX, config.rightEyeY, config);
+            if (!config.disabledEye.disablesLeftEye()) {
+                drawClosedEye(graphics, texture, config.leftEyeX, config.leftEyeY, config, false);
+            }
+            if (!config.disabledEye.disablesRightEye()) {
+                drawClosedEye(graphics, texture, config.rightEyeX, config.rightEyeY, config, config.separateEyelidColors);
+            }
         }
         graphics.renderOutline(previewX, previewY, previewSize, previewSize, 0xFFFFFFFF);
     }
 
-    private void drawClosedEye(GuiGraphics graphics, ResourceLocation texture, int skinX, int skinY, ReactionsClientConfig config) {
+    private void drawClosedEye(GuiGraphics graphics, ResourceLocation texture, int skinX, int skinY, ReactionsClientConfig config, boolean rightColor) {
         int eyeWidth = Math.max(1, config.eyeWidth);
         int eyeHeight = Math.max(1, config.eyeHeight);
         int x = previewX + (skinX - FACE_U) * previewPixelSize;
         int y = previewY + (skinY - FACE_V) * previewPixelSize;
         if (eyeHeight == 1) {
-            drawEyelidTile(graphics, texture, x, y, eyeWidth * previewPixelSize, previewPixelSize, eyelidTintAlpha(config, 0, 1, 0, 1), config);
+            drawEyelidTile(graphics, texture, x, y, eyeWidth * previewPixelSize, previewPixelSize, eyelidTintAlpha(config, 0, 1, 0, 1), config, rightColor);
             return;
         }
 
         for (int row = 0; row < eyeHeight; row++) {
             for (int column = 0; column < eyeWidth; column++) {
-                drawEyelidTile(graphics, texture, x + column * previewPixelSize, y + row * previewPixelSize, previewPixelSize, previewPixelSize, eyelidTintAlpha(config, row, eyeHeight, column, eyeWidth), config);
+                drawEyelidTile(graphics, texture, x + column * previewPixelSize, y + row * previewPixelSize, previewPixelSize, previewPixelSize, eyelidTintAlpha(config, row, eyeHeight, column, eyeWidth), config, rightColor);
             }
         }
     }
 
-    private void drawEyelidTile(GuiGraphics graphics, ResourceLocation texture, int x, int y, int width, int height, int tintAlpha, ReactionsClientConfig config) {
-        graphics.blit(RenderType::guiTextured, texture, x, y, clamp(config.eyelidColorX, 0, SKIN_SIZE - 1), clamp(config.eyelidColorY, 0, SKIN_SIZE - 1), width, height, 1, 1, SKIN_SIZE, SKIN_SIZE);
+    private void drawEyelidTile(GuiGraphics graphics, ResourceLocation texture, int x, int y, int width, int height, int tintAlpha, ReactionsClientConfig config, boolean rightColor) {
+        int sourceX = rightColor ? config.rightEyelidColorX : config.eyelidColorX;
+        int sourceY = rightColor ? config.rightEyelidColorY : config.eyelidColorY;
+        ReactionsClientConfig.EyeSkinLayer layer = rightColor ? config.rightEyelidColorSkinLayer : config.eyelidColorSkinLayer;
+        graphics.blit(RenderType::guiTextured, texture, x, y, ReactionsClientConfig.eyeSourceX(sourceX, layer), clamp(sourceY, 0, SKIN_SIZE - 1), width, height, 1, 1, SKIN_SIZE, SKIN_SIZE);
         if (tintAlpha > 0) {
             graphics.fill(x, y, x + width, y + height, tintAlpha << 24);
         }
@@ -197,6 +223,16 @@ public final class ReactionsEyelidOptionsScreen extends Screen {
 
     private Component eyelidTintText() {
         return Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.eyelid_tint.short"), onOffShort(!ReactionsClientConfig.get().cleanEyelidColor));
+    }
+
+    private Component separateColorsText() {
+        return Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.separate_eyelid_colors"), onOffShort(ReactionsClientConfig.get().separateEyelidColors));
+    }
+
+    private Component mainColorText() {
+        ReactionsClientConfig config = ReactionsClientConfig.get();
+        return Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.main_eyelid_color"),
+            Component.translatable(config.separateEyelidColors && config.rightEyelidIsMain ? "gui.reactions.side.right" : "gui.reactions.side.left"));
     }
 
     private static Component onOffShort(boolean enabled) {

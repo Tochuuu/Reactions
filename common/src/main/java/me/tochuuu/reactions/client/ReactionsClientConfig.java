@@ -41,6 +41,8 @@ public final class ReactionsClientConfig {
     public int eyelidTintIntensity = DEFAULT_EYELID_TINT_INTENSITY;
     public boolean showMouth = true;
     public boolean showEyebrows = false;
+    public boolean separateEyelidColors = false;
+    public boolean rightEyelidIsMain = false;
     public boolean animateMouth = true;
     public DisabledEye disabledEye = DisabledEye.NONE;
     public EyeSkinLayer eyeSkinLayer = EyeSkinLayer.BASE;
@@ -48,6 +50,7 @@ public final class ReactionsClientConfig {
     public EyeSkinLayer rightEyeSkinLayer;
     public EyeSkinLayer mouthSkinLayer;
     public EyeSkinLayer eyelidColorSkinLayer;
+    public EyeSkinLayer rightEyelidColorSkinLayer;
     public int leftEyeX = 9;
     public int leftEyeY = 12;
     public int rightEyeX = 13;
@@ -58,6 +61,8 @@ public final class ReactionsClientConfig {
     public int rightMouthY = 14;
     public int eyelidColorX = 10;
     public int eyelidColorY = 11;
+    public int rightEyelidColorX = -1;
+    public int rightEyelidColorY = -1;
     public int eyeWidth = 2;
     public int eyeHeight = 1;
     public int movementPixels = 1;
@@ -181,6 +186,11 @@ public final class ReactionsClientConfig {
         rightMouthY = clamp(rightMouthY, 8, 15);
         eyelidColorX = clamp(eyelidColorX, 0, 63);
         eyelidColorY = clamp(eyelidColorY, 0, 63);
+        if (rightEyelidColorSkinLayer == null) {
+            rightEyelidColorSkinLayer = eyelidColorSkinLayer;
+        }
+        rightEyelidColorX = clamp(rightEyelidColorX < 0 ? eyelidColorX : rightEyelidColorX, 0, 63);
+        rightEyelidColorY = clamp(rightEyelidColorY < 0 ? eyelidColorY : rightEyelidColorY, 0, 63);
         eyelidTintIntensity = clampEyelidTintIntensity(eyelidTintIntensity);
         movementPixels = clamp(movementPixels, 0, 4);
         blinkIntervalTicks = clamp(blinkIntervalTicks, 20, 400);
@@ -275,12 +285,16 @@ public final class ReactionsClientConfig {
         public int rightEyeY = 12;
         public boolean showMouth = true;
         public boolean showEyebrows = false;
+        public boolean separateEyelidColors = false;
+        public boolean rightEyelidIsMain = false;
         public int leftMouthX = 11;
         public int leftMouthY = 14;
         public int rightMouthX = 12;
         public int rightMouthY = 14;
         public int eyelidColorX = 10;
         public int eyelidColorY = 11;
+        public int rightEyelidColorX = -1;
+        public int rightEyelidColorY = -1;
         public int eyeWidth = 2;
         public int eyeHeight = 1;
         public DisabledEye disabledEye = DisabledEye.NONE;
@@ -289,6 +303,7 @@ public final class ReactionsClientConfig {
         public EyeSkinLayer rightEyeSkinLayer;
         public EyeSkinLayer mouthSkinLayer;
         public EyeSkinLayer eyelidColorSkinLayer;
+        public EyeSkinLayer rightEyelidColorSkinLayer;
 
         private static PlayerOverride from(ReactionsClientConfig config) {
             PlayerOverride override = new PlayerOverride();
@@ -304,6 +319,11 @@ public final class ReactionsClientConfig {
             override.rightMouthY = config.rightMouthY;
             override.eyelidColorX = config.eyelidColorX;
             override.eyelidColorY = config.eyelidColorY;
+            override.separateEyelidColors = config.separateEyelidColors;
+            override.rightEyelidIsMain = config.rightEyelidIsMain;
+            override.rightEyelidColorX = config.rightEyelidColorX;
+            override.rightEyelidColorY = config.rightEyelidColorY;
+            override.rightEyelidColorSkinLayer = config.rightEyelidColorSkinLayer;
             override.eyeWidth = config.eyeWidth;
             override.eyeHeight = config.eyeHeight;
             override.disabledEye = config.disabledEye;
@@ -349,6 +369,11 @@ public final class ReactionsClientConfig {
             rightMouthY = ReactionsClientConfig.clamp(rightMouthY, 8, 15);
             eyelidColorX = ReactionsClientConfig.clamp(eyelidColorX, 0, 63);
             eyelidColorY = ReactionsClientConfig.clamp(eyelidColorY, 0, 63);
+            if (rightEyelidColorSkinLayer == null) {
+                rightEyelidColorSkinLayer = eyelidColorSkinLayer;
+            }
+            rightEyelidColorX = ReactionsClientConfig.clamp(rightEyelidColorX < 0 ? eyelidColorX : rightEyelidColorX, 0, 63);
+            rightEyelidColorY = ReactionsClientConfig.clamp(rightEyelidColorY < 0 ? eyelidColorY : rightEyelidColorY, 0, 63);
         }
     }
 }

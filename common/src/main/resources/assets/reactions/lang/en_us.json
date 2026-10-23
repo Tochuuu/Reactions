@@ -29,6 +29,12 @@
   "gui.reactions.eyelid_color": "Eyelid Color",
   "gui.reactions.eyelid_options": "Eyelid Options",
   "gui.reactions.eyelid_options.short": "Eyelids",
+  "gui.reactions.separate_eyelid_colors": "Separate",
+  "gui.reactions.separate_eyelid_colors.tooltip": "Experimental: choose a different color for each eyelid using L Lid and R Lid on the skin grid.",
+  "gui.reactions.main_eyelid_color": "Main",
+  "gui.reactions.main_eyelid_color.tooltip": "Color used to cover the original eyebrow pixels. Eyelid colors stay independent.",
+  "gui.reactions.side.left": "Left",
+  "gui.reactions.side.right": "Right",
   "gui.reactions.shaded_eyelids": "Shaded Lids",
   "gui.reactions.textured_lids": "Textured Lids",
   "gui.reactions.textured_lids.short": "Textured",
@@ -49,5 +55,9 @@
   "gui.reactions.edit.right_eye.short": "R Eye",
   "gui.reactions.edit.mouth": "Mouth",
   "gui.reactions.edit.eyelid_color": "Eyelid Color",
-  "gui.reactions.edit.eyelid_color.short": "Lid"
+  "gui.reactions.edit.eyelid_color.short": "Lid",
+  "gui.reactions.edit.left_eyelid": "Left Eyelid Color",
+  "gui.reactions.edit.right_eyelid": "Right Eyelid Color",
+  "gui.reactions.edit.left_eyelid.short": "L Lid",
+  "gui.reactions.edit.right_eyelid.short": "R Lid"
 }

@@ -30,14 +30,14 @@ public final class ReactionsKeyBindsScreen extends Screen {
     protected void init() {
         rows.clear();
 
-        int buttonHeight = this.height < 160 ? 16 : BUTTON_HEIGHT;
-        int rowGap = this.height < 160 ? 3 : GAP;
+        int buttonHeight = this.height < 160 ? 12 : this.height < 210 ? 16 : BUTTON_HEIGHT;
+        int rowGap = this.height < 160 ? 2 : this.height < 210 ? 3 : GAP;
         int panelWidth = Math.max(180, Math.min(PANEL_WIDTH, this.width - 16));
         int resetWidth = this.width < 260 ? 44 : 58;
         int keyWidth = panelWidth - resetWidth - GAP;
         int x = this.width / 2 - panelWidth / 2;
         int rowCount = reactionsKeys().length;
-        int contentHeight = rowCount * buttonHeight + (rowCount - 1) * rowGap + rowGap + buttonHeight;
+        int contentHeight = (rowCount + 1) * (buttonHeight + rowGap);
         int y = clamp(this.height / 2 - contentHeight / 2 + 8, 30, Math.max(30, this.height - contentHeight - 8));
 
         for (KeyMapping key : reactionsKeys()) {
@@ -153,6 +153,7 @@ public final class ReactionsKeyBindsScreen extends Screen {
             ReactionsClient.manualCloseEyesKey(),
             ReactionsClient.manualLookEyesKey(),
             ReactionsClient.manualSquintEyesKey(),
+            ReactionsClient.manualRaiseEyebrowKey(),
             ReactionsClient.openConfigKey()
         };
     }

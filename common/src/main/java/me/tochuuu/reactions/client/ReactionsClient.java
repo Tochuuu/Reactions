@@ -15,9 +15,11 @@ public final class ReactionsClient {
     private static final KeyMapping MANUAL_CLOSE_EYES = new KeyMapping("key.reactions.manual_close_eyes", InputConstants.UNKNOWN.getType(), InputConstants.UNKNOWN.getValue(), CATEGORY);
     private static final KeyMapping MANUAL_SQUINT_EYES = new KeyMapping("key.reactions.manual_squint_eyes", InputConstants.UNKNOWN.getType(), InputConstants.UNKNOWN.getValue(), CATEGORY);
     private static final KeyMapping MANUAL_LOOK_EYES = new KeyMapping("key.reactions.manual_look_eyes", InputConstants.UNKNOWN.getType(), InputConstants.UNKNOWN.getValue(), CATEGORY);
+    private static final KeyMapping MANUAL_RAISE_EYEBROW = new KeyMapping("key.reactions.manual_raise_eyebrow", InputConstants.UNKNOWN.getType(), InputConstants.UNKNOWN.getValue(), CATEGORY);
     private static final HeldKeyState CLOSE_EYES_STATE = new HeldKeyState();
     private static final HeldKeyState SQUINT_EYES_STATE = new HeldKeyState();
     private static final HeldKeyState LOOK_EYES_STATE = new HeldKeyState();
+    private static final HeldKeyState RAISE_EYEBROW_STATE = new HeldKeyState();
     private static boolean initialized;
 
     private ReactionsClient() {
@@ -48,30 +50,27 @@ public final class ReactionsClient {
         return MANUAL_LOOK_EYES;
     }
 
+    public static KeyMapping manualRaiseEyebrowKey() {
+        return MANUAL_RAISE_EYEBROW;
+    }
+
     public static boolean manualEyeKeysUnbound() {
-        return MANUAL_CLOSE_EYES.isUnbound() || MANUAL_SQUINT_EYES.isUnbound() || MANUAL_LOOK_EYES.isUnbound();
+        return MANUAL_CLOSE_EYES.isUnbound() || MANUAL_SQUINT_EYES.isUnbound() || MANUAL_LOOK_EYES.isUnbound()
+            || ReactionsClientConfig.get().animateSkepticalExpression && MANUAL_RAISE_EYEBROW.isUnbound();
     }
 
     public static ManualEyeControl manualEyeControl() {
+        ManualEyeControl.Pose pose = ManualEyeControl.Pose.OPEN;
         if (CLOSE_EYES_STATE.active()) {
-            if (CLOSE_EYES_STATE.tripleTapHold) {
-                return ManualEyeControl.CLOSE_LEFT;
-            }
-            return CLOSE_EYES_STATE.doubleTapHold ? ManualEyeControl.CLOSE_ONE : ManualEyeControl.CLOSE_BOTH;
+            pose = CLOSE_EYES_STATE.tripleTapHold ? ManualEyeControl.Pose.CLOSE_LEFT
+                : CLOSE_EYES_STATE.doubleTapHold ? ManualEyeControl.Pose.CLOSE_RIGHT : ManualEyeControl.Pose.CLOSE_BOTH;
+        } else if (SQUINT_EYES_STATE.active()) {
+            pose = SQUINT_EYES_STATE.doubleTapHold ? ManualEyeControl.Pose.WIDEN : ManualEyeControl.Pose.SQUINT;
         }
-        if (SQUINT_EYES_STATE.active()) {
-            if (LOOK_EYES_STATE.active()) {
-                if (SQUINT_EYES_STATE.doubleTapHold) {
-                    return LOOK_EYES_STATE.doubleTapHold ? ManualEyeControl.SURPRISE_LOOK_RIGHT : ManualEyeControl.SURPRISE_LOOK_LEFT;
-                }
-                return LOOK_EYES_STATE.doubleTapHold ? ManualEyeControl.SQUINT_LOOK_RIGHT : ManualEyeControl.SQUINT_LOOK_LEFT;
-            }
-            return SQUINT_EYES_STATE.doubleTapHold ? ManualEyeControl.SURPRISE_BOTH : ManualEyeControl.SQUINT_BOTH;
-        }
-        if (LOOK_EYES_STATE.active()) {
-            return LOOK_EYES_STATE.doubleTapHold ? ManualEyeControl.LOOK_RIGHT : ManualEyeControl.LOOK_LEFT;
-        }
-        return ManualEyeControl.NONE;
+        int look = LOOK_EYES_STATE.active() ? LOOK_EYES_STATE.doubleTapHold ? 1 : -1 : 0;
+        int eyebrow = ReactionsClientConfig.get().animateSkepticalExpression && RAISE_EYEBROW_STATE.active()
+            ? RAISE_EYEBROW_STATE.doubleTapHold ? 1 : -1 : 0;
+        return new ManualEyeControl(pose, look, eyebrow);
     }
 
     public static void onClientTick(Minecraft client) {
@@ -79,6 +78,7 @@ public final class ReactionsClient {
         CLOSE_EYES_STATE.update(MANUAL_CLOSE_EYES);
         SQUINT_EYES_STATE.update(MANUAL_SQUINT_EYES);
         LOOK_EYES_STATE.update(MANUAL_LOOK_EYES, LOOK_RELEASE_GRACE_TICKS);
+        RAISE_EYEBROW_STATE.update(MANUAL_RAISE_EYEBROW);
         ReactionsNetworking.sendLocalManualEyeControl(manualEyeControl().networkValue());
         while (OPEN_CONFIG.consumeClick()) {
             Minecraft minecraft = Minecraft.getInstance();
@@ -88,59 +88,94 @@ public final class ReactionsClient {
         }
     }
 
-    public enum ManualEyeControl {
-        NONE,
-        CLOSE_BOTH,
-        CLOSE_ONE,
-        SQUINT_BOTH,
-        SURPRISE_BOTH,
-        LOOK_LEFT,
-        LOOK_RIGHT,
-        SQUINT_LOOK_LEFT,
-        SQUINT_LOOK_RIGHT,
-        SURPRISE_LOOK_LEFT,
-        SURPRISE_LOOK_RIGHT,
-        CLOSE_LEFT;
+    public record ManualEyeControl(Pose pose, int look, int eyebrow) {
+        // Preserve codes 0-13; additional codes pack independent pose, gaze and brow states.
+        private static final ManualEyeControl[] LEGACY_CONTROLS = {
+            new ManualEyeControl(Pose.OPEN, 0, 0),
+            new ManualEyeControl(Pose.CLOSE_BOTH, 0, 0),
+            new ManualEyeControl(Pose.CLOSE_RIGHT, 0, 0),
+            new ManualEyeControl(Pose.SQUINT, 0, 0),
+            new ManualEyeControl(Pose.WIDEN, 0, 0),
+            new ManualEyeControl(Pose.OPEN, -1, 0),
+            new ManualEyeControl(Pose.OPEN, 1, 0),
+            new ManualEyeControl(Pose.SQUINT, -1, 0),
+            new ManualEyeControl(Pose.SQUINT, 1, 0),
+            new ManualEyeControl(Pose.WIDEN, -1, 0),
+            new ManualEyeControl(Pose.WIDEN, 1, 0),
+            new ManualEyeControl(Pose.CLOSE_LEFT, 0, 0),
+            new ManualEyeControl(Pose.OPEN, 0, -1),
+            new ManualEyeControl(Pose.OPEN, 0, 1)
+        };
+        public static final ManualEyeControl NONE = LEGACY_CONTROLS[0];
+
+        public enum Pose {
+            OPEN,
+            CLOSE_BOTH,
+            CLOSE_RIGHT,
+            SQUINT,
+            WIDEN,
+            CLOSE_LEFT
+        }
 
         public static ManualEyeControl fromNetwork(int value) {
-            ManualEyeControl[] values = values();
-            return value >= 0 && value < values.length ? values[value] : NONE;
+            if (value >= 0 && value < LEGACY_CONTROLS.length) {
+                return LEGACY_CONTROLS[value];
+            }
+            int packed = value - LEGACY_CONTROLS.length;
+            Pose[] poses = Pose.values();
+            if (packed < 0 || packed >= poses.length * 9) {
+                return NONE;
+            }
+            return new ManualEyeControl(poses[packed % poses.length], packed / poses.length % 3 - 1, packed / (poses.length * 3) - 1);
         }
 
         public int networkValue() {
-            return ordinal();
+            for (int i = 0; i < LEGACY_CONTROLS.length; i++) {
+                if (equals(LEGACY_CONTROLS[i])) {
+                    return i;
+                }
+            }
+            return LEGACY_CONTROLS.length + pose.ordinal() + Pose.values().length * (look + 1) + Pose.values().length * 3 * (eyebrow + 1);
         }
 
         public boolean active() {
-            return this != NONE;
+            return pose != Pose.OPEN || look != 0 || eyebrow != 0;
         }
 
         public boolean closesEyes() {
-            return this == CLOSE_BOTH || this == CLOSE_ONE || this == CLOSE_LEFT;
+            return pose == Pose.CLOSE_BOTH || pose == Pose.CLOSE_RIGHT || pose == Pose.CLOSE_LEFT;
         }
 
         public boolean squintsEyes() {
-            return this == SQUINT_BOTH || this == SQUINT_LOOK_LEFT || this == SQUINT_LOOK_RIGHT;
+            return pose == Pose.SQUINT;
         }
 
         public boolean surprisesEyes() {
-            return this == SURPRISE_BOTH || this == SURPRISE_LOOK_LEFT || this == SURPRISE_LOOK_RIGHT;
+            return pose == Pose.WIDEN;
         }
 
         public boolean looksLeft() {
-            return this == LOOK_LEFT || this == SQUINT_LOOK_LEFT || this == SURPRISE_LOOK_LEFT;
+            return look == -1;
         }
 
         public boolean looksRight() {
-            return this == LOOK_RIGHT || this == SQUINT_LOOK_RIGHT || this == SURPRISE_LOOK_RIGHT;
+            return look == 1;
+        }
+
+        public boolean raisesLeftEyebrow() {
+            return eyebrow == -1;
+        }
+
+        public boolean raisesRightEyebrow() {
+            return eyebrow == 1;
         }
 
         public boolean affectsLeftEye() {
-            return this == CLOSE_BOTH || this == CLOSE_LEFT || this == SQUINT_BOTH || this == SURPRISE_BOTH || this == SQUINT_LOOK_LEFT || this == SQUINT_LOOK_RIGHT || this == SURPRISE_LOOK_LEFT || this == SURPRISE_LOOK_RIGHT;
+            return pose == Pose.CLOSE_BOTH || pose == Pose.CLOSE_LEFT || pose == Pose.SQUINT || pose == Pose.WIDEN;
         }
 
         public boolean affectsRightEye() {
-            return this == CLOSE_BOTH || this == CLOSE_ONE || this == SQUINT_BOTH || this == SURPRISE_BOTH || this == SQUINT_LOOK_LEFT || this == SQUINT_LOOK_RIGHT || this == SURPRISE_LOOK_LEFT || this == SURPRISE_LOOK_RIGHT;
+            return pose == Pose.CLOSE_BOTH || pose == Pose.CLOSE_RIGHT || pose == Pose.SQUINT || pose == Pose.WIDEN;
         }
     }
 

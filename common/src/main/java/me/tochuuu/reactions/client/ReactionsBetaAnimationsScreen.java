@@ -19,22 +19,32 @@ public final class ReactionsBetaAnimationsScreen extends Screen {
     protected void init() {
         int panelWidth = Math.max(90, Math.min(PANEL_WIDTH, this.width - 24));
         int x = this.width / 2 - panelWidth / 2;
-        int y = Math.min(Math.max(32, this.height / 2 - 36), Math.max(32, this.height - 76));
+        int buttonHeight = this.height < 120 ? 12 : this.height < 160 ? 16 : 20;
+        int gap = this.height < 120 ? 2 : this.height < 160 ? 4 : 8;
+        int step = buttonHeight + gap;
+        int contentHeight = buttonHeight * 4 + gap * 3;
+        int y = Math.max(32, Math.min(this.height / 2 - contentHeight / 2, this.height - contentHeight - 8));
 
         addRenderableWidget(Button.builder(bowShootingAnimationText(), button -> {
             ReactionsClientConfig.get().animateBowShooting = !ReactionsClientConfig.get().animateBowShooting;
             ReactionsClientConfig.save();
             rebuildWidgets();
-        }).bounds(x, y, panelWidth, 20).build());
+        }).bounds(x, y, panelWidth, buttonHeight).build());
 
         addRenderableWidget(Button.builder(Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.eyebrows"), onOff(ReactionsClientConfig.get().showEyebrows)), button -> {
             ReactionsClientConfig.get().showEyebrows = !ReactionsClientConfig.get().showEyebrows;
             ReactionsClientConfig.save();
             rebuildWidgets();
-        }).bounds(x, y + 28, panelWidth, 20).build());
+        }).bounds(x, y + step, panelWidth, buttonHeight).build());
 
-        int backY = Math.min(Math.max(y + 56, this.height - 30), this.height - 24);
-        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.back"), button -> onClose()).bounds(this.width / 2 - 45, backY, 90, 20).build());
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.toggle", Component.translatable("gui.reactions.skeptical_expression"), onOff(ReactionsClientConfig.get().animateSkepticalExpression)), button -> {
+            ReactionsClientConfig.get().animateSkepticalExpression = !ReactionsClientConfig.get().animateSkepticalExpression;
+            ReactionsClientConfig.save();
+            rebuildWidgets();
+        }).bounds(x, y + step * 2, panelWidth, buttonHeight).build());
+
+        int backY = Math.max(y + step * 3, this.height - buttonHeight - 8);
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.back"), button -> onClose()).bounds(this.width / 2 - 45, backY, 90, buttonHeight).build());
     }
 
     @Override

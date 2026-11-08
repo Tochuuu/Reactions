@@ -82,6 +82,7 @@ public final class ReactionsNeoForgeNetworking implements ReactionsNetworking.Pl
         event.register(ReactionsClient.manualCloseEyesKey());
         event.register(ReactionsClient.manualSquintEyesKey());
         event.register(ReactionsClient.manualLookEyesKey());
+        event.register(ReactionsClient.manualRaiseEyebrowKey());
     }
 
     private static void onPlayerJoin(PlayerEvent.PlayerLoggedInEvent event) {

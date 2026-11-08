@@ -35,6 +35,7 @@ public final class ReactionsClientConfig {
     public boolean animateSelf = true;
     public boolean animateOthers = true;
     public boolean animateBowShooting = false;
+    public boolean animateSkepticalExpression = false;
     @SerializedName(value = "cleanEyelidColor", alternate = "naturalEyeColors")
     public boolean cleanEyelidColor = DEFAULT_CLEAN_EYELID_COLOR;
     public boolean texturedEyelids = DEFAULT_TEXTURED_EYELIDS;

@@ -107,7 +107,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         }
 
         ReactionsClientConfig config = ReactionsClientConfig.get();
-        if (!config.enabled || player.isInvisible()) {
+        if (!config.enabled || player.isInvisible()
+            || !((PlayerModel) getParentModel()).head.visible || FirstPersonCompatibility.hidesFace(player)) {
             return;
         }
 
@@ -449,6 +450,30 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private enum EyeSide {
         LEFT,
         RIGHT
+    }
+
+    private static final class FirstPersonCompatibility {
+        private static final Method RENDERING_PLAYER = optionalMethod("dev.tr7zw.firstperson.api.FirstPersonAPI", "isRenderingPlayer");
+
+        private static boolean hidesFace(AbstractClientPlayer player) {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (RENDERING_PLAYER == null || minecraft.getCameraEntity() != player) {
+                return false;
+            }
+            try {
+                return Boolean.TRUE.equals(RENDERING_PLAYER.invoke(null));
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return false;
+            }
+        }
+
+        private static Method optionalMethod(String className, String methodName) {
+            try {
+                return Class.forName(className, false, PlayerEyeRenderLayer.class.getClassLoader()).getMethod(methodName);
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return null;
+            }
+        }
     }
 
     private static final class EMFCompatibility {

@@ -88,7 +88,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     @Override
     public void submit(PoseStack poseStack, SubmitNodeCollector collector, int light, AvatarRenderState state, float limbSwing, float limbSwingAmount) {
         ReactionsClientConfig config = ReactionsClientConfig.get();
-        if (!config.enabled || state.skin == null || state.isInvisible) {
+        if (!config.enabled || state.skin == null || state.isInvisible
+            || !getParentModel().head.visible || FirstPersonCompatibility.hidesFace(state)) {
             return;
         }
 
@@ -414,6 +415,40 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private enum EyeSide {
         LEFT,
         RIGHT
+    }
+
+    private static final class FirstPersonCompatibility {
+        private static final Method CAMERA_ENTITY = optionalMethod("dev.tr7zw.firstperson.access.LivingEntityRenderStateAccess", "isCameraEntity");
+        private static final Method RENDERING_PLAYER = optionalMethod("dev.tr7zw.firstperson.api.FirstPersonAPI", "isRenderingPlayer");
+
+        private static boolean hidesFace(AvatarRenderState state) {
+            // The per-state flag survives deferred rendering and distinguishes GUI previews.
+            if (CAMERA_ENTITY != null && CAMERA_ENTITY.getDeclaringClass().isInstance(state)) {
+                try {
+                    return Boolean.TRUE.equals(CAMERA_ENTITY.invoke(state));
+                } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                }
+            }
+
+            Minecraft minecraft = Minecraft.getInstance();
+            if (RENDERING_PLAYER == null || minecraft.getCameraEntity() == null
+                || minecraft.getCameraEntity().getId() != state.id) {
+                return false;
+            }
+            try {
+                return Boolean.TRUE.equals(RENDERING_PLAYER.invoke(null));
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return false;
+            }
+        }
+
+        private static Method optionalMethod(String className, String methodName) {
+            try {
+                return Class.forName(className, false, PlayerEyeRenderLayer.class.getClassLoader()).getMethod(methodName);
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+                return null;
+            }
+        }
     }
 
     private static final class EMFCompatibility {

@@ -167,27 +167,7 @@ public final class ReactionsNetworking {
     }
 
     public static RemoteEyeConfig remoteConfig(int entityId) {
-        RemoteEyeConfig config = CLIENT_CONFIGS.get(entityId);
-        if (config != null) {
-            return config;
-        }
-
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
-            return null;
-        }
-
-        for (Player player : minecraft.level.players()) {
-            if (player.getId() == entityId) {
-                config = CLIENT_CONFIGS_BY_UUID.get(player.getUUID());
-                if (config != null) {
-                    RemoteEyeConfig resolved = withPlayerIdentity(config, player.getUUID(), entityId);
-                    CLIENT_CONFIGS.put(entityId, resolved);
-                    return resolved;
-                }
-            }
-        }
-        return null;
+        return ClientNetworking.remoteConfig(entityId);
     }
 
     public static boolean hasRemoteConfig(int entityId) {
@@ -195,49 +175,11 @@ public final class ReactionsNetworking {
     }
 
     public static int remoteEyeFocus(int entityId) {
-        Integer focus = CLIENT_EYE_FOCUSES.get(entityId);
-        if (focus != null) {
-            return focus;
-        }
-
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
-            return 0;
-        }
-
-        for (Player player : minecraft.level.players()) {
-            if (player.getId() == entityId) {
-                focus = CLIENT_EYE_FOCUSES_BY_UUID.get(player.getUUID());
-                if (focus != null) {
-                    CLIENT_EYE_FOCUSES.put(entityId, focus);
-                    return focus;
-                }
-            }
-        }
-        return 0;
+        return ClientNetworking.remoteEyeFocus(entityId);
     }
 
     public static int remoteManualEyeControl(int entityId) {
-        Integer control = CLIENT_MANUAL_EYES.get(entityId);
-        if (control != null) {
-            return control;
-        }
-
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
-            return 0;
-        }
-
-        for (Player player : minecraft.level.players()) {
-            if (player.getId() == entityId) {
-                control = CLIENT_MANUAL_EYES_BY_UUID.get(player.getUUID());
-                if (control != null) {
-                    CLIENT_MANUAL_EYES.put(entityId, control);
-                    return control;
-                }
-            }
-        }
-        return 0;
+        return ClientNetworking.remoteManualEyeControl(entityId);
     }
 
     public static boolean hasServerConfig(UUID playerId) {
@@ -256,8 +198,7 @@ public final class ReactionsNetworking {
     }
 
     public static boolean canSyncWithServer() {
-        Minecraft minecraft = Minecraft.getInstance();
-        return minecraft.level != null && platform != null && platform.canSendToServer();
+        return ClientNetworking.canSyncWithServer();
     }
 
     public static void sendLocalConfigToServer() {
@@ -314,123 +255,19 @@ public final class ReactionsNetworking {
     }
 
     private static boolean trySendLocalConfigToServer() {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || minecraft.player == null || platform == null || !platform.canSendToServer()) {
-            return false;
-        }
-
-        Integer entityId = assignedEntityId(minecraft.player);
-        if (entityId == null) {
-            return false;
-        }
-
-        platform.sendToServer(new EyeConfigC2SPayload(localConfig(minecraft.player.getUUID(), entityId)));
-        return true;
+        return ClientNetworking.trySendLocalConfigToServer();
     }
 
     private static void syncIntegratedServerHostConfig() {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || minecraft.getSingleplayerServer() == null) {
-            return;
-        }
-
-        ServerPlayer host = null;
-        for (ServerPlayer player : minecraft.getSingleplayerServer().getPlayerList().getPlayers()) {
-            if (player.getUUID().equals(minecraft.player.getUUID())) {
-                host = player;
-                break;
-            }
-        }
-        if (host == null) {
-            return;
-        }
-
-        Integer hostEntityId = assignedEntityId(host);
-        if (hostEntityId == null) {
-            return;
-        }
-
-        RemoteEyeConfig hostConfig = localConfig(host.getUUID(), hostEntityId);
-        if (hostConfig.equals(SERVER_CONFIGS.get(host.getUUID()))) {
-            return;
-        }
-
-        SERVER_CONFIGS.put(host.getUUID(), hostConfig);
-        sendUpdateToReceivers(host, hostConfig);
+        ClientNetworking.syncIntegratedServerHostConfig();
     }
 
     private static void syncIntegratedServerHostEyeFocus(int focus) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || minecraft.getSingleplayerServer() == null) {
-            return;
-        }
-
-        ServerPlayer host = null;
-        for (ServerPlayer player : minecraft.getSingleplayerServer().getPlayerList().getPlayers()) {
-            if (player.getUUID().equals(minecraft.player.getUUID())) {
-                host = player;
-                break;
-            }
-        }
-        if (host == null) {
-            return;
-        }
-
-        Integer hostEntityId = assignedEntityId(host);
-        if (hostEntityId == null) {
-            return;
-        }
-
-        EyeFocusState current = SERVER_EYE_FOCUSES.get(host.getUUID());
-        if (focus == 0) {
-            if (current == null) {
-                return;
-            }
-            SERVER_EYE_FOCUSES.remove(host.getUUID());
-        } else {
-            if (current != null && current.focus() == focus && current.entityId() == hostEntityId) {
-                return;
-            }
-            SERVER_EYE_FOCUSES.put(host.getUUID(), new EyeFocusState(host.getUUID(), hostEntityId, focus));
-        }
-        sendEyeFocusToReceivers(host, focus);
+        ClientNetworking.syncIntegratedServerHostEyeFocus(focus);
     }
 
     private static void syncIntegratedServerHostManualEye(int control) {
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || minecraft.getSingleplayerServer() == null) {
-            return;
-        }
-
-        ServerPlayer host = null;
-        for (ServerPlayer player : minecraft.getSingleplayerServer().getPlayerList().getPlayers()) {
-            if (player.getUUID().equals(minecraft.player.getUUID())) {
-                host = player;
-                break;
-            }
-        }
-        if (host == null) {
-            return;
-        }
-
-        Integer hostEntityId = assignedEntityId(host);
-        if (hostEntityId == null) {
-            return;
-        }
-
-        ManualEyeState current = SERVER_MANUAL_EYES.get(host.getUUID());
-        if (control == 0) {
-            if (current == null) {
-                return;
-            }
-            SERVER_MANUAL_EYES.remove(host.getUUID());
-        } else {
-            if (current != null && current.control() == control && current.entityId() == hostEntityId) {
-                return;
-            }
-            SERVER_MANUAL_EYES.put(host.getUUID(), new ManualEyeState(host.getUUID(), hostEntityId, control));
-        }
-        sendManualEyeToReceivers(host, control);
+        ClientNetworking.syncIntegratedServerHostManualEye(control);
     }
 
     private static void retryServerSync(MinecraftServer server) {
@@ -828,39 +665,7 @@ public final class ReactionsNetworking {
     }
 
     private static RemoteEyeConfig localConfig(UUID playerId, int entityId) {
-        ReactionsClientConfig config = ReactionsClientConfig.get();
-        return new RemoteEyeConfig(
-            playerId,
-            entityId,
-            config.leftEyeX,
-            config.leftEyeY,
-            config.rightEyeX,
-            config.rightEyeY,
-            config.showMouth,
-            config.leftMouthX,
-            config.leftMouthY,
-            config.rightMouthX,
-            config.rightMouthY,
-            config.eyelidColorX,
-            config.eyelidColorY,
-            config.eyeWidth,
-            config.eyeHeight,
-            config.cleanEyelidColor,
-            config.texturedEyelids,
-            config.eyelidTintIntensity,
-            config.disabledEye,
-            config.showEyebrows,
-            config.eyeSkinLayer,
-            config.leftEyeSkinLayer,
-            config.rightEyeSkinLayer,
-            config.mouthSkinLayer,
-            config.eyelidColorSkinLayer,
-            config.separateEyelidColors,
-            config.rightEyelidColorX,
-            config.rightEyelidColorY,
-            config.rightEyelidColorSkinLayer,
-            config.rightEyelidIsMain
-        );
+        return ClientNetworking.localConfig(playerId, entityId);
     }
 
     private static Integer assignedEntityId(Player player) {
@@ -924,19 +729,7 @@ public final class ReactionsNetworking {
     }
 
     private static void removeRemoteEyeFocus(UUID playerId) {
-        CLIENT_EYE_FOCUSES_BY_UUID.remove(playerId);
-        CLIENT_EYE_FOCUSES.entrySet().removeIf(entry -> {
-            Minecraft minecraft = Minecraft.getInstance();
-            if (minecraft.level == null) {
-                return false;
-            }
-            for (Player player : minecraft.level.players()) {
-                if (player.getId() == entry.getKey()) {
-                    return playerId.equals(player.getUUID());
-                }
-            }
-            return false;
-        });
+        ClientNetworking.removeRemoteEyeFocus(playerId);
     }
 
     private static void applyRemoteManualEye(UUID playerId, int entityId, int control) {
@@ -952,19 +745,273 @@ public final class ReactionsNetworking {
     }
 
     private static void removeRemoteManualEye(UUID playerId) {
-        CLIENT_MANUAL_EYES_BY_UUID.remove(playerId);
-        CLIENT_MANUAL_EYES.entrySet().removeIf(entry -> {
+        ClientNetworking.removeRemoteManualEye(playerId);
+    }
+
+    // Loaded only by client entry points; the server relay must not resolve Minecraft client classes.
+    private static final class ClientNetworking {
+        private static RemoteEyeConfig remoteConfig(int entityId) {
+            RemoteEyeConfig config = CLIENT_CONFIGS.get(entityId);
+            if (config != null) {
+                return config;
+            }
+
             Minecraft minecraft = Minecraft.getInstance();
             if (minecraft.level == null) {
-                return false;
+                return null;
             }
+
             for (Player player : minecraft.level.players()) {
-                if (player.getId() == entry.getKey()) {
-                    return playerId.equals(player.getUUID());
+                if (player.getId() == entityId) {
+                    config = CLIENT_CONFIGS_BY_UUID.get(player.getUUID());
+                    if (config != null) {
+                        RemoteEyeConfig resolved = withPlayerIdentity(config, player.getUUID(), entityId);
+                        CLIENT_CONFIGS.put(entityId, resolved);
+                        return resolved;
+                    }
                 }
             }
-            return false;
-        });
+            return null;
+        }
+
+        private static int remoteEyeFocus(int entityId) {
+            Integer focus = CLIENT_EYE_FOCUSES.get(entityId);
+            if (focus != null) {
+                return focus;
+            }
+
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.level == null) {
+                return 0;
+            }
+
+            for (Player player : minecraft.level.players()) {
+                if (player.getId() == entityId) {
+                    focus = CLIENT_EYE_FOCUSES_BY_UUID.get(player.getUUID());
+                    if (focus != null) {
+                        CLIENT_EYE_FOCUSES.put(entityId, focus);
+                        return focus;
+                    }
+                }
+            }
+            return 0;
+        }
+
+        private static int remoteManualEyeControl(int entityId) {
+            Integer control = CLIENT_MANUAL_EYES.get(entityId);
+            if (control != null) {
+                return control;
+            }
+
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.level == null) {
+                return 0;
+            }
+
+            for (Player player : minecraft.level.players()) {
+                if (player.getId() == entityId) {
+                    control = CLIENT_MANUAL_EYES_BY_UUID.get(player.getUUID());
+                    if (control != null) {
+                        CLIENT_MANUAL_EYES.put(entityId, control);
+                        return control;
+                    }
+                }
+            }
+            return 0;
+        }
+
+        private static boolean canSyncWithServer() {
+            Minecraft minecraft = Minecraft.getInstance();
+            return minecraft.level != null && platform != null && platform.canSendToServer();
+        }
+
+        private static boolean trySendLocalConfigToServer() {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.level == null || minecraft.player == null || platform == null || !platform.canSendToServer()) {
+                return false;
+            }
+
+            Integer entityId = assignedEntityId(minecraft.player);
+            if (entityId == null) {
+                return false;
+            }
+
+            platform.sendToServer(new EyeConfigC2SPayload(localConfig(minecraft.player.getUUID(), entityId)));
+            return true;
+        }
+
+        private static void syncIntegratedServerHostConfig() {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.player == null || minecraft.getSingleplayerServer() == null) {
+                return;
+            }
+
+            ServerPlayer host = null;
+            for (ServerPlayer player : minecraft.getSingleplayerServer().getPlayerList().getPlayers()) {
+                if (player.getUUID().equals(minecraft.player.getUUID())) {
+                    host = player;
+                    break;
+                }
+            }
+            if (host == null) {
+                return;
+            }
+
+            Integer hostEntityId = assignedEntityId(host);
+            if (hostEntityId == null) {
+                return;
+            }
+
+            RemoteEyeConfig hostConfig = localConfig(host.getUUID(), hostEntityId);
+            if (hostConfig.equals(SERVER_CONFIGS.get(host.getUUID()))) {
+                return;
+            }
+
+            SERVER_CONFIGS.put(host.getUUID(), hostConfig);
+            sendUpdateToReceivers(host, hostConfig);
+        }
+
+        private static void syncIntegratedServerHostEyeFocus(int focus) {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.player == null || minecraft.getSingleplayerServer() == null) {
+                return;
+            }
+
+            ServerPlayer host = null;
+            for (ServerPlayer player : minecraft.getSingleplayerServer().getPlayerList().getPlayers()) {
+                if (player.getUUID().equals(minecraft.player.getUUID())) {
+                    host = player;
+                    break;
+                }
+            }
+            if (host == null) {
+                return;
+            }
+
+            Integer hostEntityId = assignedEntityId(host);
+            if (hostEntityId == null) {
+                return;
+            }
+
+            EyeFocusState current = SERVER_EYE_FOCUSES.get(host.getUUID());
+            if (focus == 0) {
+                if (current == null) {
+                    return;
+                }
+                SERVER_EYE_FOCUSES.remove(host.getUUID());
+            } else {
+                if (current != null && current.focus() == focus && current.entityId() == hostEntityId) {
+                    return;
+                }
+                SERVER_EYE_FOCUSES.put(host.getUUID(), new EyeFocusState(host.getUUID(), hostEntityId, focus));
+            }
+            sendEyeFocusToReceivers(host, focus);
+        }
+
+        private static void syncIntegratedServerHostManualEye(int control) {
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.player == null || minecraft.getSingleplayerServer() == null) {
+                return;
+            }
+
+            ServerPlayer host = null;
+            for (ServerPlayer player : minecraft.getSingleplayerServer().getPlayerList().getPlayers()) {
+                if (player.getUUID().equals(minecraft.player.getUUID())) {
+                    host = player;
+                    break;
+                }
+            }
+            if (host == null) {
+                return;
+            }
+
+            Integer hostEntityId = assignedEntityId(host);
+            if (hostEntityId == null) {
+                return;
+            }
+
+            ManualEyeState current = SERVER_MANUAL_EYES.get(host.getUUID());
+            if (control == 0) {
+                if (current == null) {
+                    return;
+                }
+                SERVER_MANUAL_EYES.remove(host.getUUID());
+            } else {
+                if (current != null && current.control() == control && current.entityId() == hostEntityId) {
+                    return;
+                }
+                SERVER_MANUAL_EYES.put(host.getUUID(), new ManualEyeState(host.getUUID(), hostEntityId, control));
+            }
+            sendManualEyeToReceivers(host, control);
+        }
+
+        private static RemoteEyeConfig localConfig(UUID playerId, int entityId) {
+            ReactionsClientConfig config = ReactionsClientConfig.get();
+            return new RemoteEyeConfig(
+                playerId,
+                entityId,
+                config.leftEyeX,
+                config.leftEyeY,
+                config.rightEyeX,
+                config.rightEyeY,
+                config.showMouth,
+                config.leftMouthX,
+                config.leftMouthY,
+                config.rightMouthX,
+                config.rightMouthY,
+                config.eyelidColorX,
+                config.eyelidColorY,
+                config.eyeWidth,
+                config.eyeHeight,
+                config.cleanEyelidColor,
+                config.texturedEyelids,
+                config.eyelidTintIntensity,
+                config.disabledEye,
+                config.showEyebrows,
+                config.eyeSkinLayer,
+                config.leftEyeSkinLayer,
+                config.rightEyeSkinLayer,
+                config.mouthSkinLayer,
+                config.eyelidColorSkinLayer,
+                config.separateEyelidColors,
+                config.rightEyelidColorX,
+                config.rightEyelidColorY,
+                config.rightEyelidColorSkinLayer,
+                config.rightEyelidIsMain
+            );
+        }
+
+        private static void removeRemoteEyeFocus(UUID playerId) {
+            CLIENT_EYE_FOCUSES_BY_UUID.remove(playerId);
+            CLIENT_EYE_FOCUSES.entrySet().removeIf(entry -> {
+                Minecraft minecraft = Minecraft.getInstance();
+                if (minecraft.level == null) {
+                    return false;
+                }
+                for (Player player : minecraft.level.players()) {
+                    if (player.getId() == entry.getKey()) {
+                        return playerId.equals(player.getUUID());
+                    }
+                }
+                return false;
+            });
+        }
+
+        private static void removeRemoteManualEye(UUID playerId) {
+            CLIENT_MANUAL_EYES_BY_UUID.remove(playerId);
+            CLIENT_MANUAL_EYES.entrySet().removeIf(entry -> {
+                Minecraft minecraft = Minecraft.getInstance();
+                if (minecraft.level == null) {
+                    return false;
+                }
+                for (Player player : minecraft.level.players()) {
+                    if (player.getId() == entry.getKey()) {
+                        return playerId.equals(player.getUUID());
+                    }
+                }
+                return false;
+            });
+        }
     }
 
     private static int clamp(int value, int min, int max) {

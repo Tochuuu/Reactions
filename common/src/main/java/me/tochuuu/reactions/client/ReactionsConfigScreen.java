@@ -144,9 +144,9 @@ public final class ReactionsConfigScreen extends Screen {
         addSizeButton(panelX + panelWidth - buttonHeight, y, false, 1, buttonHeight);
 
         int actionY = denseLayout ? y + buttonHeight + actionGap : Math.min(this.height - 50, y + buttonHeight + actionGap);
-        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.beta"), button -> {
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.animations"), button -> {
             if (this.minecraft != null) {
-                this.minecraft.gui.setScreen(new ReactionsBetaAnimationsScreen(this));
+                this.minecraft.gui.setScreen(new ReactionsAnimationsScreen(this));
             }
         }).bounds(panelX, actionY, half, buttonHeight).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.reset"), button -> {
@@ -224,9 +224,9 @@ public final class ReactionsConfigScreen extends Screen {
 
         int bottomY = y + buttonHeight + actionGap;
         int third = Math.max(1, (panelWidth - GAP * 2) / 3);
-        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.beta"), button -> {
+        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.animations"), button -> {
             if (this.minecraft != null) {
-                this.minecraft.gui.setScreen(new ReactionsBetaAnimationsScreen(this));
+                this.minecraft.gui.setScreen(new ReactionsAnimationsScreen(this));
             }
         }).bounds(panelX, bottomY, third, buttonHeight).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.reset"), button -> {

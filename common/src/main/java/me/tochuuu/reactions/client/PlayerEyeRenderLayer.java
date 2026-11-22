@@ -29,6 +29,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.WeakHashMap;
+import net.minecraft.tags.FluidTags;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 @SuppressWarnings({"rawtypes", "unchecked"})
 public final class PlayerEyeRenderLayer extends RenderLayer {
@@ -83,6 +90,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final double FALL_SURPRISE_SPEED = -0.35D;
     private static final int FALL_SURPRISE_MIN_TICKS = 30;
     private static final int LANDING_BLINK_TICKS = 7;
+    private static final double SUN_SQUINT_ENTER_DOT = Math.cos(Math.toRadians(12.0D));
+    private static final double SUN_SQUINT_EXIT_DOT = Math.cos(Math.toRadians(15.0D));
+    private static final double SUN_VISIBILITY_DISTANCE = 256.0D;
+    private static final Map<AbstractClientPlayer, SunVisibilitySample> SUN_VISIBILITY = new WeakHashMap<>();
     private static final EyeSettings DEFAULT_EYES = new EyeSettings(9, 12, 13, 12, false, false, 11, 14, 12, 14, 10, 11, 2, 1, ReactionsClientConfig.DisabledEye.NONE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, ReactionsClientConfig.EyeSkinLayer.BASE, false, 10, 11, ReactionsClientConfig.EyeSkinLayer.BASE, false);
     private static final java.util.Map<Integer, Float> IDLE_STARTED_AT = new java.util.HashMap<>();
     private static final java.util.Map<Integer, DamageEyeReaction> DAMAGE_REACTIONS = new java.util.HashMap<>();
@@ -134,25 +145,29 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         boolean animationsEnabled = isSelf ? config.animateSelf : config.animateOthers;
         boolean mouthAnimationsEnabled = animationsEnabled && config.animateMouth;
         boolean sleeping = player.isSleeping();
-        FallEyeReaction fallReaction = animationsEnabled ? fallReaction(player, ageInTicks) : FallEyeReaction.NONE;
+        FallEyeReaction fallReaction = animationsEnabled && (config.animateFalling || config.animateLanding) ? fallReaction(player, ageInTicks) : FallEyeReaction.NONE;
         ReactionsClient.ManualEyeControl manualEyeControl = isSelf
             ? ReactionsClient.manualEyeControl()
-            : ReactionsClient.ManualEyeControl.fromNetwork(ReactionsNetworking.remoteManualEyeControl(player.getId()));
-        boolean manualEyeActive = !sleeping && manualEyeControl.active();
+            : ReactionsClient.ManualEyeControl.fromNetwork(ReactionsNetworking.remoteManualEyeControl(player.getId())).filtered(config);
+        boolean manualEyeActive = animationsEnabled && !sleeping && manualEyeControl.active();
         boolean manualWideEyes = manualEyeActive && manualEyeControl.surprisesEyes();
-        boolean blinking = !manualEyeActive && !sleeping && animationsEnabled && (isBlinking(player, ageInTicks, config) || fallReaction == FallEyeReaction.LANDING_BLINK);
-        int blockFocusEye = animationsEnabled && !blinking ? blockFocusEye(player, isSelf) : 0;
-        int mountedBackEye = animationsEnabled && !blinking ? mountedBackEye(player, partialTick) : 0;
-        int eyeLook = animationsEnabled && !blinking ? blockFocusEye != 0 ? blockFocusEye : mountedBackEye != 0 ? mountedBackEye : mirroredIdleEye(player, ageInTicks) : 0;
-        HumanoidArm spyglassArm = spyglassUseArm(player);
+        boolean blinking = !manualEyeActive && !sleeping && animationsEnabled && (config.animateBlinking && isBlinking(player, ageInTicks, config) || config.animateLanding && fallReaction == FallEyeReaction.LANDING_BLINK);
+        if (!config.animateIdleLooking || !animationsEnabled) {
+            IDLE_STARTED_AT.remove(player.getId());
+        }
+        int blockFocusEye = animationsEnabled && config.animateBlockFocus && !blinking ? blockFocusEye(player, isSelf) : 0;
+        int mountedBackEye = animationsEnabled && config.animateVehicleLook && !blinking ? mountedBackEye(player, partialTick) : 0;
+        int eyeLook = animationsEnabled && !blinking ? blockFocusEye != 0 ? blockFocusEye : mountedBackEye != 0 ? mountedBackEye : config.animateIdleLooking ? mirroredIdleEye(player, ageInTicks) : 0 : 0;
+        HumanoidArm spyglassArm = config.animateSpyglass ? spyglassUseArm(player) : null;
         HumanoidArm bowArm = bowUseArm(player);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(player, bowArm);
-        DamageEyeReaction damageReaction = animationsEnabled ? damageReaction(player.getId(), player.hurtTime > 0, ageInTicks) : DamageEyeReaction.NONE;
-        boolean fallingSurprise = fallReaction == FallEyeReaction.SURPRISE || manualWideEyes;
+        DamageEyeReaction damageReaction = damageReaction(player.getId(), animationsEnabled && config.animateDamage && player.hurtTime > 0, ageInTicks);
+        boolean fallingSurprise = animationsEnabled && config.animateFalling && fallReaction == FallEyeReaction.SURPRISE || manualWideEyes;
         boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallingSurprise;
+        boolean squinting = bowSquint || config.animateSunSquint && sunSquint(player, partialTick) && !manualEyeActive && !hurtSclera;
         MouthUseAnimation mouthUseAnimation = mouthAnimationsEnabled ? mouthUseAnimation(player) : MouthUseAnimation.NONE;
-        EyeExpression leftEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, bowSquint);
-        EyeExpression rightEye = eyeExpression(sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, bowSquint);
+        EyeExpression leftEye = eyeExpression(animationsEnabled && config.animateSleeping && sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, squinting);
+        EyeExpression rightEye = eyeExpression(animationsEnabled && config.animateSleeping && sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, squinting);
         if (damageReaction == DamageEyeReaction.CLOSED) {
             leftEye = EyeExpression.CLOSED;
             rightEye = EyeExpression.CLOSED;
@@ -218,10 +233,10 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             ReactionsClientConfig.EyeSkinLayer colorLayer = eyes.separateEyelidColors ? eyes.rightEyelidColorSkinLayer : eyes.eyelidColorSkinLayer;
             submitLayeredEye(poseStack, consumer, light, overlay, eyes.rightEyeX, eyes.rightEyeY, colorX, colorY, eyes.eyeWidth, eyes.eyeHeight, eyes.rightEyeSkinLayer, colorLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, eyelidColor, eyelidStyle.texturedEyelids);
         }
-        if (mouthAnimationsEnabled && AdvancementMouthReaction.active(player.getId())) {
+        if (mouthAnimationsEnabled && config.animateAdvancements && AdvancementMouthReaction.active(player.getId())) {
             submitAdvancementMouth(poseStack, consumer, light, overlay, eyes);
         } else if (eyes.mouthEnabled || config.showMouth) {
-            if (mouthAnimationsEnabled && mouthUseAnimation != MouthUseAnimation.NONE) {
+            if (mouthAnimationsEnabled && mouthUseAnimationEnabled(mouthUseAnimation, config)) {
                 submitUseMouth(poseStack, consumer, light, overlay, eyes, mouthUseAnimation, ageInTicks, player.getId());
             } else {
                 submitMouth(poseStack, consumer, light, overlay, eyes);
@@ -230,16 +245,234 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         poseStack.popPose();
     }
 
+
+    private static boolean sunSquint(AbstractClientPlayer player, float partialTick) {
+        ReactionsClientConfig config = ReactionsClientConfig.get();
+        Level level = player.level();
+        if (!config.enabled || !config.animateSunSquint || player.isSleeping() || player.isDeadOrDying()
+            || !level.dimensionType().effectsLocation().equals(BuiltinDimensionTypes.OVERWORLD_EFFECTS)
+            || level.getRainLevel(partialTick) > 0.2F || level.getThunderLevel(partialTick) > 0.2F
+            || player.isEyeInFluid(FluidTags.WATER) || player.isEyeInFluid(FluidTags.LAVA)) {
+            SUN_VISIBILITY.remove(player);
+            return false;
+        }
+
+        Vec3 eyePosition = player.getEyePosition(partialTick);
+        float sunAngle = level.getSunAngle(partialTick);
+        // Match SkyRenderer's Y(-90 degrees) * X(sunAngle) rotation of the sun.
+        Vec3 sunDirection = new Vec3(-Math.sin(sunAngle), Math.cos(sunAngle), 0.0D);
+        Vec3 look = Vec3.directionFromRotation(player.getViewXRot(partialTick), Mth.rotLerp(partialTick, player.yHeadRotO, player.yHeadRot));
+        SunVisibilitySample previous = SUN_VISIBILITY.get(player);
+        double threshold = previous != null && previous.visible ? SUN_SQUINT_EXIT_DOT : SUN_SQUINT_ENTER_DOT;
+        if (sunDirection.y <= 0.05D || look.dot(sunDirection) < threshold) {
+            SUN_VISIBILITY.remove(player);
+            return false;
+        }
+
+        // Recheck facing every frame, but raycast at most once per player tick.
+        if (previous != null && previous.tick == player.tickCount) {
+            return previous.visible;
+        }
+        boolean visible = level.clip(new ClipContext(eyePosition, eyePosition.add(sunDirection.scale(SUN_VISIBILITY_DISTANCE)),
+            ClipContext.Block.VISUAL, ClipContext.Fluid.ANY, player)).getType() == HitResult.Type.MISS;
+        SUN_VISIBILITY.put(player, new SunVisibilitySample(player.tickCount, visible));
+        return visible;
+    }
+
+
+    private record SunVisibilitySample(int tick, boolean visible) {}
+
+    public enum PreviewAnimation {
+        BLINKING, IDLE_LOOKING, SLEEPING, SPYGLASS, SUN_SQUINT, DAMAGE, FALLING, LANDING, BLOCK_FOCUS,
+        VEHICLE_LOOK, BOW_SQUINT, EYEBROWS, EATING, DRINKING, HORN, ADVANCEMENTS,
+        MANUAL_CLOSING, MANUAL_SQUINTING, MANUAL_WIDENING, MANUAL_LOOKING, SKEPTICAL
+    }
+
+    // A detached GUI state never reads or writes the live player's animation timers.
+    public static final class PreviewState {
+        public float ageInTicks;
+        private final PreviewAnimation animation;
+
+        public PreviewState(PreviewAnimation animation) {
+            this.animation = animation;
+        }
+
+        private int phase() {
+            return Math.floorMod((int) ageInTicks, 80);
+        }
+
+        private boolean is(PreviewAnimation animation) {
+            return this.animation == animation && phase() < 60;
+        }
+
+        private boolean blinking() {
+            return animation == PreviewAnimation.BLINKING && (phase() >= 12 && phase() < 16 || phase() >= 40 && phase() < 44);
+        }
+
+        private int horizontalLook() {
+            return phase() < 30 ? -1 : 1;
+        }
+
+        private int blockFocus() {
+            return is(PreviewAnimation.BLOCK_FOCUS) ? phase() < 30 ? DIRECT_BLOCK_FOCUS_DOWN_SIGNAL : DIRECT_BLOCK_FOCUS_UP_SIGNAL : 0;
+        }
+
+        private DamageEyeReaction damage(ReactionsClientConfig config) {
+            return config.animateDamage && is(PreviewAnimation.DAMAGE)
+                ? phase() < 30 ? DamageEyeReaction.CLOSED : DamageEyeReaction.SCLERA : DamageEyeReaction.NONE;
+        }
+
+        private PreviewActions actions() {
+            MouthUseAnimation mouth = is(PreviewAnimation.EATING) ? MouthUseAnimation.EATING
+                : is(PreviewAnimation.DRINKING) ? MouthUseAnimation.DRINKING
+                : is(PreviewAnimation.HORN) ? MouthUseAnimation.WHISTLING : MouthUseAnimation.NONE;
+            float yaw = is(PreviewAnimation.VEHICLE_LOOK) ? phase() < 30 ? -90.0F : 90.0F : 0.0F;
+            boolean landing = animation == PreviewAnimation.LANDING && phase() >= 12 && phase() < 16;
+            return new PreviewActions(mouth, is(PreviewAnimation.FALLING), landing, yaw, is(PreviewAnimation.SUN_SQUINT));
+        }
+
+        private ReactionsClient.ManualEyeControl manualControl() {
+            ReactionsClient.ManualEyeControl.Pose pose = ReactionsClient.ManualEyeControl.Pose.OPEN;
+            if (is(PreviewAnimation.MANUAL_CLOSING)) {
+                pose = phase() < 20 ? ReactionsClient.ManualEyeControl.Pose.CLOSE_BOTH
+                    : phase() < 40 ? ReactionsClient.ManualEyeControl.Pose.CLOSE_RIGHT : ReactionsClient.ManualEyeControl.Pose.CLOSE_LEFT;
+            } else if (is(PreviewAnimation.MANUAL_SQUINTING)) {
+                pose = ReactionsClient.ManualEyeControl.Pose.SQUINT;
+            } else if (is(PreviewAnimation.MANUAL_WIDENING)) {
+                pose = ReactionsClient.ManualEyeControl.Pose.WIDEN;
+            }
+            int look = is(PreviewAnimation.MANUAL_LOOKING) ? phase() < 30 ? -1 : 1 : 0;
+            int brow = is(PreviewAnimation.SKEPTICAL) ? phase() < 30 ? -1 : 1 : 0;
+            return new ReactionsClient.ManualEyeControl(pose, look, brow);
+        }
+    }
+
+
+    private record PreviewActions(MouthUseAnimation mouthUseAnimation, boolean fallingSurprise, boolean landingBlink, float mountedYawDelta, boolean sunSquint) {}
+
+    private static boolean mouthUseAnimationEnabled(MouthUseAnimation animation, ReactionsClientConfig config) {
+        return switch (animation) {
+            case NONE -> false;
+            case EATING -> config.animateEating;
+            case DRINKING -> config.animateDrinking;
+            case WHISTLING -> config.animateHorn;
+        };
+    }
+
+    public void renderPreview(PoseStack poseStack, MultiBufferSource bufferSource, int light, ResourceLocation texture, PreviewState preview) {
+        ReactionsClientConfig config = ReactionsClientConfig.get();
+        EyeSettings eyes = EyeSettings.local(config);
+        EyelidStyle eyelidStyle = EyelidStyle.local(config);
+        RenderType renderType = renderType(texture);
+        float ageInTicks = preview.ageInTicks;
+        boolean animationsEnabled = true;
+        boolean mouthAnimationsEnabled = animationsEnabled && config.animateMouth;
+        boolean sleeping = preview.is(PreviewAnimation.SLEEPING);
+        FallEyeReaction fallReaction = preview.is(PreviewAnimation.FALLING) ? FallEyeReaction.SURPRISE
+            : preview.actions().landingBlink() ? FallEyeReaction.LANDING_BLINK : FallEyeReaction.NONE;
+        ReactionsClient.ManualEyeControl manualEyeControl = preview.manualControl().filtered(config);
+        boolean manualEyeActive = animationsEnabled && !sleeping && manualEyeControl.active();
+        boolean manualWideEyes = manualEyeActive && manualEyeControl.surprisesEyes();
+        boolean blinking = !manualEyeActive && !sleeping && animationsEnabled && (config.animateBlinking && preview.blinking() || config.animateLanding && fallReaction == FallEyeReaction.LANDING_BLINK);
+        int blockFocusEye = animationsEnabled && config.animateBlockFocus && !blinking ? preview.blockFocus() : 0;
+        int mountedBackEye = config.animateVehicleLook && !blinking && preview.is(PreviewAnimation.VEHICLE_LOOK) ? preview.phase() < 30 ? 1 : -1 : 0;
+        int eyeLook = animationsEnabled && !blinking ? blockFocusEye != 0 ? blockFocusEye : mountedBackEye != 0 ? mountedBackEye : config.animateIdleLooking ? preview.is(PreviewAnimation.IDLE_LOOKING) ? preview.horizontalLook() : 0 : 0 : 0;
+        HumanoidArm spyglassArm = config.animateSpyglass && preview.is(PreviewAnimation.SPYGLASS) ? HumanoidArm.LEFT : null;
+        boolean bowSquint = config.animateBowShooting && preview.is(PreviewAnimation.BOW_SQUINT);
+        DamageEyeReaction damageReaction = preview.damage(config);
+        boolean fallingSurprise = animationsEnabled && config.animateFalling && fallReaction == FallEyeReaction.SURPRISE || manualWideEyes || config.showEyebrows && preview.is(PreviewAnimation.EYEBROWS);
+        boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallingSurprise;
+        boolean squinting = bowSquint || config.animateSunSquint && preview.is(PreviewAnimation.SUN_SQUINT) && !manualEyeActive && !hurtSclera;
+        MouthUseAnimation mouthUseAnimation = mouthAnimationsEnabled ? preview.actions().mouthUseAnimation() : MouthUseAnimation.NONE;
+        EyeExpression leftEye = eyeExpression(animationsEnabled && config.animateSleeping && sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, squinting);
+        EyeExpression rightEye = eyeExpression(animationsEnabled && config.animateSleeping && sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, squinting);
+        if (damageReaction == DamageEyeReaction.CLOSED) {
+            leftEye = EyeExpression.CLOSED;
+            rightEye = EyeExpression.CLOSED;
+        }
+        if (manualEyeActive) {
+            EyeExpression manualExpression = manualExpression(manualEyeControl);
+            int manualLook = manualEyeLook(manualEyeControl);
+            boolean manualApplied = false;
+            if (manualExpression != null && manualEyeControl.affectsLeftEye() && spyglassArm != HumanoidArm.LEFT) {
+                leftEye = manualExpression;
+                manualApplied = true;
+            }
+            if (manualExpression != null && manualEyeControl.affectsRightEye() && spyglassArm != HumanoidArm.RIGHT) {
+                rightEye = manualExpression;
+                manualApplied = true;
+            }
+            if (manualLook != 0) {
+                eyeLook = manualLook;
+                manualApplied = true;
+            } else if (manualApplied || manualEyeControl.surprisesEyes()) {
+                eyeLook = 0;
+            }
+        }
+
+        boolean skepticalActive = manualEyeActive && animationsEnabled && !hurtSclera
+            && damageReaction != DamageEyeReaction.CLOSED && spyglassArm == null && !bowSquint;
+        boolean raiseLeft = skepticalActive && manualEyeControl.raisesLeftEyebrow() && !eyes.disabledEye.disablesLeftEye();
+        boolean raiseRight = skepticalActive && manualEyeControl.raisesRightEyebrow() && !eyes.disabledEye.disablesRightEye();
+        if (raiseLeft || raiseRight) {
+            EyeExpression raisedEye = eyes.eyebrowsEnabled ? EyeExpression.OPEN : EyeExpression.RAISED_LID;
+            if (leftEye != EyeExpression.CLOSED && !manualEyeControl.squintsEyes()) {
+                leftEye = raiseLeft ? raisedEye : EyeExpression.SOFT_SQUINT;
+            }
+            if (rightEye != EyeExpression.CLOSED && !manualEyeControl.squintsEyes()) {
+                rightEye = raiseRight ? raisedEye : EyeExpression.SOFT_SQUINT;
+            }
+            // Keep horizontal gaze, but let the manual expression control eye height.
+            if (eyeLook != -1 && eyeLook != 1) {
+                eyeLook = 0;
+            }
+        }
+
+        poseStack.pushPose();
+        translateToFacePose(poseStack);
+        VertexConsumer consumer = bufferSource.getBuffer(renderType);
+        int overlay = OverlayTexture.NO_OVERLAY;
+        int eyelidColor = eyelidColor(eyelidStyle.cleanEyelidColor, eyelidStyle.eyelidTintIntensity, eyes.eyeHeight);
+        if (eyes.eyebrowsEnabled) {
+            if (!eyes.disabledEye.disablesLeftEye()) {
+                submitAnimatedEyebrow(poseStack, consumer, light, overlay, eyes, eyes.leftEyeX, eyes.leftEyeY, eyes.leftEyeSkinLayer, leftEye, hurtSclera, raiseLeft);
+            }
+            if (!eyes.disabledEye.disablesRightEye()) {
+                submitAnimatedEyebrow(poseStack, consumer, light, overlay, eyes, eyes.rightEyeX, eyes.rightEyeY, eyes.rightEyeSkinLayer, rightEye, hurtSclera, raiseRight);
+            }
+        }
+        if (!eyes.disabledEye.disablesLeftEye()) {
+            submitLayeredEye(poseStack, consumer, light, overlay, eyes.leftEyeX, eyes.leftEyeY, eyes.eyelidColorX, eyes.eyelidColorY, eyes.eyeWidth, eyes.eyeHeight, eyes.leftEyeSkinLayer, eyes.eyelidColorSkinLayer, leftEye, eyeLook, EyeSide.LEFT, hurtSclera, eyelidColor, eyelidStyle.texturedEyelids);
+        }
+        if (!eyes.disabledEye.disablesRightEye()) {
+            int colorX = eyes.separateEyelidColors ? eyes.rightEyelidColorX : eyes.eyelidColorX;
+            int colorY = eyes.separateEyelidColors ? eyes.rightEyelidColorY : eyes.eyelidColorY;
+            ReactionsClientConfig.EyeSkinLayer colorLayer = eyes.separateEyelidColors ? eyes.rightEyelidColorSkinLayer : eyes.eyelidColorSkinLayer;
+            submitLayeredEye(poseStack, consumer, light, overlay, eyes.rightEyeX, eyes.rightEyeY, colorX, colorY, eyes.eyeWidth, eyes.eyeHeight, eyes.rightEyeSkinLayer, colorLayer, rightEye, eyeLook, EyeSide.RIGHT, hurtSclera, eyelidColor, eyelidStyle.texturedEyelids);
+        }
+        if (mouthAnimationsEnabled && config.animateAdvancements && preview.is(PreviewAnimation.ADVANCEMENTS)) {
+            submitAdvancementMouth(poseStack, consumer, light, overlay, eyes);
+        } else if (eyes.mouthEnabled || config.showMouth) {
+            if (mouthAnimationsEnabled && mouthUseAnimationEnabled(mouthUseAnimation, config)) {
+                submitUseMouth(poseStack, consumer, light, overlay, eyes, mouthUseAnimation, ageInTicks, Integer.MIN_VALUE);
+            } else {
+                submitMouth(poseStack, consumer, light, overlay, eyes);
+            }
+        }
+        poseStack.popPose();
+    }
+
     private void renderMouthOnly(PoseStack poseStack, MultiBufferSource bufferSource, int light, AbstractClientPlayer player, RenderType renderType, boolean animationsEnabled, EyeSettings eyes) {
+        ReactionsClientConfig config = ReactionsClientConfig.get();
         poseStack.pushPose();
         translateToFacePose(poseStack);
         VertexConsumer consumer = bufferSource.getBuffer(renderType);
         int overlay = ReactionsClientConfig.get().cleanEyelidColor ? OverlayTexture.NO_OVERLAY : LivingEntityRenderer.getOverlayCoords(player, 0.0F);
-        if (animationsEnabled && AdvancementMouthReaction.active(player.getId())) {
+        if (animationsEnabled && config.animateAdvancements && AdvancementMouthReaction.active(player.getId())) {
             submitAdvancementMouth(poseStack, consumer, light, overlay, eyes);
         } else {
             MouthUseAnimation mouthUseAnimation = animationsEnabled ? mouthUseAnimation(player) : MouthUseAnimation.NONE;
-            if (animationsEnabled && mouthUseAnimation != MouthUseAnimation.NONE) {
+            if (animationsEnabled && mouthUseAnimationEnabled(mouthUseAnimation, config)) {
                 submitUseMouth(poseStack, consumer, light, overlay, eyes, mouthUseAnimation, player.tickCount, player.getId());
             } else {
                 submitMouth(poseStack, consumer, light, overlay, eyes);

@@ -1,14 +1,21 @@
 package me.tochuuu.reactions.client;
 
-import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.entity.state.PlayerRenderState;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.vehicle.AbstractBoat;
 import net.minecraft.world.item.ItemUseAnimation;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 public final class PlayerActionAnimationState {
     private static final float FALL_SURPRISE_DISTANCE = 3.0F;
@@ -16,7 +23,11 @@ public final class PlayerActionAnimationState {
     private static final double FALL_SURPRISE_SPEED = -0.35D;
     private static final int FALL_SURPRISE_MIN_TICKS = 30;
     private static final int LANDING_BLINK_TICKS = 7;
-    private static final Snapshot EMPTY = new Snapshot(MouthUseAnimation.NONE, false, false, 0.0F);
+    private static final double SUN_SQUINT_ENTER_DOT = Math.cos(Math.toRadians(12.0D));
+    private static final double SUN_SQUINT_EXIT_DOT = Math.cos(Math.toRadians(15.0D));
+    private static final double SUN_VISIBILITY_DISTANCE = 256.0D;
+    private static final Snapshot EMPTY = new Snapshot(MouthUseAnimation.NONE, false, false, 0.0F, false);
+    private static final Map<AbstractClientPlayer, SunVisibilitySample> SUN_VISIBILITY = new WeakHashMap<>();
     private static final Map<Integer, Snapshot> SNAPSHOTS = new HashMap<>();
     private static final Map<Integer, Float> FALL_DISTANCE_PEAKS = new HashMap<>();
     private static final Map<Integer, Float> VISIBLE_FALL_DISTANCE_PEAKS = new HashMap<>();
@@ -33,11 +44,44 @@ public final class PlayerActionAnimationState {
         int entityId = player.getId();
         MouthUseAnimation mouthUseAnimation = mouthUseAnimation(player);
         FallState fallState = fallState(player, state);
-        SNAPSHOTS.put(entityId, new Snapshot(mouthUseAnimation, fallState.surprise(), fallState.landingBlink(), mountedYawDelta(player, state, partialTick)));
+        SNAPSHOTS.put(entityId, new Snapshot(mouthUseAnimation, fallState.surprise(), fallState.landingBlink(), mountedYawDelta(player, state, partialTick), sunSquint(player, partialTick)));
     }
 
     public static Snapshot snapshot(int entityId) {
         return SNAPSHOTS.getOrDefault(entityId, EMPTY);
+    }
+
+    private static boolean sunSquint(AbstractClientPlayer player, float partialTick) {
+        ReactionsClientConfig config = ReactionsClientConfig.get();
+        Level level = player.level();
+        if (!config.enabled || !config.animateSunSquint || player.isSleeping() || player.isDeadOrDying()
+            || !level.dimensionType().effectsLocation().equals(BuiltinDimensionTypes.OVERWORLD_EFFECTS)
+            || level.getRainLevel(partialTick) > 0.2F || level.getThunderLevel(partialTick) > 0.2F
+            || player.isEyeInFluid(FluidTags.WATER) || player.isEyeInFluid(FluidTags.LAVA)) {
+            SUN_VISIBILITY.remove(player);
+            return false;
+        }
+
+        Vec3 eyePosition = player.getEyePosition(partialTick);
+        float sunAngle = level.getSunAngle(partialTick);
+        // Match SkyRenderer's Y(-90 degrees) * X(sunAngle) rotation of the sun.
+        Vec3 sunDirection = new Vec3(-Math.sin(sunAngle), Math.cos(sunAngle), 0.0D);
+        Vec3 look = Vec3.directionFromRotation(player.getXRot(partialTick), Mth.rotLerp(partialTick, player.yHeadRotO, player.yHeadRot));
+        SunVisibilitySample previous = SUN_VISIBILITY.get(player);
+        double threshold = previous != null && previous.visible ? SUN_SQUINT_EXIT_DOT : SUN_SQUINT_ENTER_DOT;
+        if (sunDirection.y <= 0.05D || look.dot(sunDirection) < threshold) {
+            SUN_VISIBILITY.remove(player);
+            return false;
+        }
+
+        // Recheck facing every frame, but raycast at most once per player tick.
+        if (previous != null && previous.tick == player.tickCount) {
+            return previous.visible;
+        }
+        boolean visible = level.clip(new ClipContext(eyePosition, eyePosition.add(sunDirection.scale(SUN_VISIBILITY_DISTANCE)),
+            ClipContext.Block.VISUAL, ClipContext.Fluid.ANY, player)).getType() == HitResult.Type.MISS;
+        SUN_VISIBILITY.put(player, new SunVisibilitySample(player.tickCount, visible));
+        return visible;
     }
 
     private static MouthUseAnimation mouthUseAnimation(AbstractClientPlayer player) {
@@ -151,7 +195,10 @@ public final class PlayerActionAnimationState {
         WHISTLING
     }
 
-    public record Snapshot(MouthUseAnimation mouthUseAnimation, boolean fallingSurprise, boolean landingBlink, float mountedYawDelta) {
+    public record Snapshot(MouthUseAnimation mouthUseAnimation, boolean fallingSurprise, boolean landingBlink, float mountedYawDelta, boolean sunSquint) {
+    }
+
+    private record SunVisibilitySample(int tick, boolean visible) {
     }
 
     private record FallState(boolean surprise, boolean landingBlink) {

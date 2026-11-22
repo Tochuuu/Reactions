@@ -55,22 +55,30 @@ public final class ReactionsClient {
     }
 
     public static boolean manualEyeKeysUnbound() {
-        return MANUAL_CLOSE_EYES.isUnbound() || MANUAL_SQUINT_EYES.isUnbound() || MANUAL_LOOK_EYES.isUnbound()
-            || ReactionsClientConfig.get().animateSkepticalExpression && MANUAL_RAISE_EYEBROW.isUnbound();
+        ReactionsClientConfig config = ReactionsClientConfig.get();
+        return config.enabled && config.animateSelf && (
+            config.animateManualClosing && MANUAL_CLOSE_EYES.isUnbound()
+                || (config.animateManualSquinting || config.animateManualWidening) && MANUAL_SQUINT_EYES.isUnbound()
+                || config.animateManualLooking && MANUAL_LOOK_EYES.isUnbound()
+                || config.animateSkepticalExpression && MANUAL_RAISE_EYEBROW.isUnbound());
     }
 
     public static ManualEyeControl manualEyeControl() {
+        ReactionsClientConfig config = ReactionsClientConfig.get();
+        if (!config.enabled || !config.animateSelf) {
+            return ManualEyeControl.NONE;
+        }
         ManualEyeControl.Pose pose = ManualEyeControl.Pose.OPEN;
-        if (CLOSE_EYES_STATE.active()) {
+        if (config.animateManualClosing && CLOSE_EYES_STATE.active()) {
             pose = CLOSE_EYES_STATE.tripleTapHold ? ManualEyeControl.Pose.CLOSE_LEFT
                 : CLOSE_EYES_STATE.doubleTapHold ? ManualEyeControl.Pose.CLOSE_RIGHT : ManualEyeControl.Pose.CLOSE_BOTH;
         } else if (SQUINT_EYES_STATE.active()) {
             pose = SQUINT_EYES_STATE.doubleTapHold ? ManualEyeControl.Pose.WIDEN : ManualEyeControl.Pose.SQUINT;
         }
         int look = LOOK_EYES_STATE.active() ? LOOK_EYES_STATE.doubleTapHold ? 1 : -1 : 0;
-        int eyebrow = ReactionsClientConfig.get().animateSkepticalExpression && RAISE_EYEBROW_STATE.active()
+        int eyebrow = config.animateSkepticalExpression && RAISE_EYEBROW_STATE.active()
             ? RAISE_EYEBROW_STATE.doubleTapHold ? 1 : -1 : 0;
-        return new ManualEyeControl(pose, look, eyebrow);
+        return new ManualEyeControl(pose, look, eyebrow).filtered(config);
     }
 
     public static void onClientTick(Minecraft client) {
@@ -140,6 +148,18 @@ public final class ReactionsClient {
 
         public boolean active() {
             return pose != Pose.OPEN || look != 0 || eyebrow != 0;
+        }
+
+        public ManualEyeControl filtered(ReactionsClientConfig config) {
+            boolean poseEnabled = switch (pose) {
+                case OPEN -> true;
+                case CLOSE_BOTH, CLOSE_RIGHT, CLOSE_LEFT -> config.animateManualClosing;
+                case SQUINT -> config.animateManualSquinting;
+                case WIDEN -> config.animateManualWidening;
+            };
+            return new ManualEyeControl(poseEnabled ? pose : Pose.OPEN,
+                config.animateManualLooking ? look : 0,
+                config.animateSkepticalExpression ? eyebrow : 0);
         }
 
         public boolean closesEyes() {

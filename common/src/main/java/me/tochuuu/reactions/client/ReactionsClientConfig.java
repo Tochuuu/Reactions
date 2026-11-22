@@ -34,6 +34,24 @@ public final class ReactionsClientConfig {
     public boolean enabled = true;
     public boolean animateSelf = true;
     public boolean animateOthers = true;
+    public boolean animateBlinking = true;
+    public boolean animateIdleLooking = true;
+    public boolean animateSleeping = true;
+    public boolean animateSpyglass = true;
+    public boolean animateSunSquint = false;
+    public boolean animateDamage = true;
+    public boolean animateFalling = true;
+    public boolean animateLanding = true;
+    public boolean animateBlockFocus = true;
+    public boolean animateVehicleLook = true;
+    public boolean animateEating = true;
+    public boolean animateDrinking = true;
+    public boolean animateHorn = true;
+    public boolean animateAdvancements = true;
+    public boolean animateManualClosing = true;
+    public boolean animateManualSquinting = true;
+    public boolean animateManualWidening = true;
+    public boolean animateManualLooking = true;
     public boolean animateBowShooting = false;
     public boolean animateSkepticalExpression = false;
     @SerializedName(value = "cleanEyelidColor", alternate = "naturalEyeColors")

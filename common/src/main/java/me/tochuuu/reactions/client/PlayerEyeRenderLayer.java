@@ -76,6 +76,11 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private static final int IDLE_LOOK_STEP_TICKS = 14;
     private static final int IDLE_LOOK_ANIMATION_TICKS = IDLE_LOOK_STEP_TICKS * 3;
     private static final int IDLE_LOOK_CYCLE_TICKS = IDLE_LOOK_DELAY_TICKS + IDLE_LOOK_ANIMATION_TICKS;
+    private static final int AFK_BLINK_INTERVAL_TICKS = 140;
+    private static final int AFK_BLINK_DURATION_TICKS = 10;
+    private static final int AFK_DELAY_TICKS = 20 * 60;
+    private static final float LOW_HEALTH_THRESHOLD = 6.0F;
+    private static final Map<AbstractClientPlayer, ActivitySample> ACTIVITY = new WeakHashMap<>();
     private static final int DIRECT_BLOCK_FOCUS_DOWN_SIGNAL = 101;
     private static final int DIRECT_BLOCK_FOCUS_UP_SIGNAL = -101;
     private static final int BOW_FULL_CHARGE_TICKS = 20;
@@ -151,20 +156,35 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
             : ReactionsClient.ManualEyeControl.fromNetwork(ReactionsNetworking.remoteManualEyeControl(player.getId())).filtered(config);
         boolean manualEyeActive = animationsEnabled && !sleeping && manualEyeControl.active();
         boolean manualWideEyes = manualEyeActive && manualEyeControl.surprisesEyes();
-        boolean blinking = !manualEyeActive && !sleeping && animationsEnabled && (config.animateBlinking && isBlinking(player, ageInTicks, config) || config.animateLanding && fallReaction == FallEyeReaction.LANDING_BLINK);
-        if (!config.animateIdleLooking || !animationsEnabled) {
+        boolean afkEyes = animationsEnabled && config.animateAfk && isAfk(player) && !sleeping && !manualEyeActive
+            && !player.isUsingItem() && !(config.animateFalling && fallReaction == FallEyeReaction.SURPRISE)
+            && !(config.animateDamage && player.hurtTime > 0);
+        int blockFocusEye = animationsEnabled && config.animateBlockFocus ? blockFocusEye(player, isSelf) : 0;
+        int mountedBackEye = animationsEnabled && config.animateVehicleLook ? mountedBackEye(player, partialTick) : 0;
+        IdleEyeAnimation idle = IdleEyeAnimation.NONE;
+        if (!(config.animateIdleLooking || config.animateIdleLookBlinking) || !animationsEnabled || sleeping || afkEyes) {
             IDLE_STARTED_AT.remove(player.getId());
+        } else if (blockFocusEye == 0 && mountedBackEye == 0) {
+            idle = idleEyeAnimation(player, ageInTicks, config.animateIdleLookBlinking ? config.blinkDurationTicks : 0);
         }
-        int blockFocusEye = animationsEnabled && config.animateBlockFocus && !blinking ? blockFocusEye(player, isSelf) : 0;
-        int mountedBackEye = animationsEnabled && config.animateVehicleLook && !blinking ? mountedBackEye(player, partialTick) : 0;
-        int eyeLook = animationsEnabled && !blinking ? blockFocusEye != 0 ? blockFocusEye : mountedBackEye != 0 ? mountedBackEye : config.animateIdleLooking ? mirroredIdleEye(player, ageInTicks) : 0 : 0;
+        boolean idleBlink = config.animateIdleLookBlinking && idle.active;
+        boolean blinking = !manualEyeActive && !sleeping && animationsEnabled
+            && (config.animateLanding && fallReaction == FallEyeReaction.LANDING_BLINK
+                || (idleBlink ? idle.blinking : afkEyes ? isAfkBlinking(ageInTicks, player.getId())
+                    : config.animateBlinking && isBlinking(player, ageInTicks, config)));
+        int eyeLook = blinking ? 0 : blockFocusEye != 0 ? blockFocusEye : mountedBackEye != 0 ? mountedBackEye : idle.look;
         HumanoidArm spyglassArm = config.animateSpyglass ? spyglassUseArm(player) : null;
         HumanoidArm bowArm = bowUseArm(player);
         boolean bowSquint = config.animateBowShooting && isBowFullyDrawn(player, bowArm);
         DamageEyeReaction damageReaction = damageReaction(player.getId(), animationsEnabled && config.animateDamage && player.hurtTime > 0, ageInTicks);
         boolean fallingSurprise = animationsEnabled && config.animateFalling && fallReaction == FallEyeReaction.SURPRISE || manualWideEyes;
         boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallingSurprise;
-        boolean squinting = bowSquint || config.animateSunSquint && sunSquint(player, partialTick) && !manualEyeActive && !hurtSclera;
+        boolean alive = !player.isDeadOrDying() && !player.isSpectator();
+        boolean automaticSquint = config.animateSunSquint && sunSquint(player, partialTick) || afkEyes
+            || config.animateLowHealth && alive && player.getHealth() <= LOW_HEALTH_THRESHOLD
+            || config.animateLowHunger && alive && player == minecraft.player
+                && !minecraft.player.getAbilities().mayfly && minecraft.player.getFoodData().getFoodLevel() <= 6;
+        boolean squinting = bowSquint || animationsEnabled && automaticSquint && !manualEyeActive && !hurtSclera;
         MouthUseAnimation mouthUseAnimation = mouthAnimationsEnabled ? mouthUseAnimation(player) : MouthUseAnimation.NONE;
         EyeExpression leftEye = eyeExpression(animationsEnabled && config.animateSleeping && sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, squinting);
         EyeExpression rightEye = eyeExpression(animationsEnabled && config.animateSleeping && sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, squinting);
@@ -246,6 +266,47 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     }
 
 
+    public static void onClientTick(Minecraft client) {
+        ReactionsClientConfig config = ReactionsClientConfig.get();
+        if (client.level == null || !config.enabled || !config.animateAfk) {
+            ACTIVITY.clear();
+            return;
+        }
+        for (AbstractClientPlayer player : client.level.players()) {
+            boolean manual = player == client.player ? ReactionsClient.manualEyeControl().active()
+                : ReactionsNetworking.remoteManualEyeControl(player.getId()) != 0;
+            boolean input = player == client.player && (client.options.keyUp.isDown() || client.options.keyDown.isDown()
+                || client.options.keyLeft.isDown() || client.options.keyRight.isDown() || client.options.keyJump.isDown()
+                || client.options.keyShift.isDown() || client.options.keySprint.isDown()
+                || client.options.keyAttack.isDown() || client.options.keyUse.isDown());
+            updateActivity(player, manual || input);
+        }
+    }
+
+    private static void updateActivity(AbstractClientPlayer player, boolean input) {
+        int tick = player.tickCount;
+        ActivitySample previous = ACTIVITY.get(player);
+        if (previous != null && previous.tick == tick) {
+            return;
+        }
+        boolean active = previous == null || tick - previous.tick != 1 || input
+            || player.isUsingItem() || player.swinging || player.hurtTime > 0
+            || player.isSleeping() || player.isDeadOrDying()
+            || player.position().distanceToSqr(previous.position) > 0.0001D
+            || Math.abs(Mth.wrapDegrees(player.yHeadRot - previous.headYaw)) > 0.1F
+            || Math.abs(player.getXRot() - previous.pitch) > 0.1F;
+        ACTIVITY.put(player, active ? new ActivitySample(tick, tick, player.position(), player.yHeadRot, player.getXRot())
+            : new ActivitySample(tick, previous.lastActivityTick, previous.position, previous.headYaw, previous.pitch));
+    }
+
+    private static boolean isAfk(AbstractClientPlayer player) {
+        ActivitySample activity = ACTIVITY.get(player);
+        return !player.isSpectator() && !player.isDeadOrDying()
+            && activity != null && player.tickCount - activity.lastActivityTick >= AFK_DELAY_TICKS;
+    }
+
+    private record ActivitySample(int tick, int lastActivityTick, Vec3 position, float headYaw, float pitch) {}
+
     private static boolean sunSquint(AbstractClientPlayer player, float partialTick) {
         ReactionsClientConfig config = ReactionsClientConfig.get();
         Level level = player.level();
@@ -283,7 +344,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private record SunVisibilitySample(int tick, boolean visible) {}
 
     public enum PreviewAnimation {
-        BLINKING, IDLE_LOOKING, SLEEPING, SPYGLASS, SUN_SQUINT, DAMAGE, FALLING, LANDING, BLOCK_FOCUS,
+        BLINKING, IDLE_LOOKING, IDLE_LOOK_BLINKING, AFK, LOW_HEALTH, LOW_HUNGER,
+        SLEEPING, SPYGLASS, SUN_SQUINT, DAMAGE, FALLING, LANDING, BLOCK_FOCUS,
         VEHICLE_LOOK, BOW_SQUINT, EYEBROWS, EATING, DRINKING, HORN, ADVANCEMENTS,
         MANUAL_CLOSING, MANUAL_SQUINTING, MANUAL_WIDENING, MANUAL_LOOKING, SKEPTICAL
     }
@@ -373,16 +435,32 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         ReactionsClient.ManualEyeControl manualEyeControl = preview.manualControl().filtered(config);
         boolean manualEyeActive = animationsEnabled && !sleeping && manualEyeControl.active();
         boolean manualWideEyes = manualEyeActive && manualEyeControl.surprisesEyes();
-        boolean blinking = !manualEyeActive && !sleeping && animationsEnabled && (config.animateBlinking && preview.blinking() || config.animateLanding && fallReaction == FallEyeReaction.LANDING_BLINK);
-        int blockFocusEye = animationsEnabled && config.animateBlockFocus && !blinking ? preview.blockFocus() : 0;
-        int mountedBackEye = config.animateVehicleLook && !blinking && preview.is(PreviewAnimation.VEHICLE_LOOK) ? preview.phase() < 30 ? 1 : -1 : 0;
-        int eyeLook = animationsEnabled && !blinking ? blockFocusEye != 0 ? blockFocusEye : mountedBackEye != 0 ? mountedBackEye : config.animateIdleLooking ? preview.is(PreviewAnimation.IDLE_LOOKING) ? preview.horizontalLook() : 0 : 0 : 0;
+        boolean afkEyes = config.animateAfk && preview.is(PreviewAnimation.AFK);
+        int blockFocusEye = config.animateBlockFocus ? preview.blockFocus() : 0;
+        int mountedBackEye = config.animateVehicleLook && preview.is(PreviewAnimation.VEHICLE_LOOK) ? preview.phase() < 30 ? 1 : -1 : 0;
+        IdleEyeAnimation idle = IdleEyeAnimation.NONE;
+        if (config.animateIdleLookBlinking && preview.animation == PreviewAnimation.IDLE_LOOK_BLINKING) {
+            int cycleLength = Math.max(80, IDLE_LOOK_ANIMATION_TICKS + config.blinkDurationTicks * 3 + 24);
+            int phase = Math.floorMod((int) preview.ageInTicks, cycleLength);
+            idle = idleLookFrame(phase - 12, config.blinkDurationTicks);
+        } else if (config.animateIdleLooking && preview.is(PreviewAnimation.IDLE_LOOKING)) {
+            idle = new IdleEyeAnimation(preview.horizontalLook(), false, true);
+        }
+        boolean idleBlink = config.animateIdleLookBlinking && idle.active;
+        boolean blinking = !manualEyeActive && !sleeping
+            && (config.animateLanding && fallReaction == FallEyeReaction.LANDING_BLINK
+                || (idleBlink ? idle.blinking : afkEyes ? preview.phase() >= 20 && preview.phase() < 20 + AFK_BLINK_DURATION_TICKS
+                    : config.animateBlinking && preview.blinking()));
+        int eyeLook = blinking ? 0 : blockFocusEye != 0 ? blockFocusEye : mountedBackEye != 0 ? mountedBackEye : idle.look;
         HumanoidArm spyglassArm = config.animateSpyglass && preview.is(PreviewAnimation.SPYGLASS) ? HumanoidArm.LEFT : null;
         boolean bowSquint = config.animateBowShooting && preview.is(PreviewAnimation.BOW_SQUINT);
         DamageEyeReaction damageReaction = preview.damage(config);
         boolean fallingSurprise = animationsEnabled && config.animateFalling && fallReaction == FallEyeReaction.SURPRISE || manualWideEyes || config.showEyebrows && preview.is(PreviewAnimation.EYEBROWS);
         boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallingSurprise;
-        boolean squinting = bowSquint || config.animateSunSquint && preview.is(PreviewAnimation.SUN_SQUINT) && !manualEyeActive && !hurtSclera;
+        boolean automaticSquint = config.animateSunSquint && preview.is(PreviewAnimation.SUN_SQUINT) || afkEyes
+            || config.animateLowHealth && preview.is(PreviewAnimation.LOW_HEALTH)
+            || config.animateLowHunger && preview.is(PreviewAnimation.LOW_HUNGER);
+        boolean squinting = bowSquint || automaticSquint && !manualEyeActive && !hurtSclera;
         MouthUseAnimation mouthUseAnimation = mouthAnimationsEnabled ? preview.actions().mouthUseAnimation() : MouthUseAnimation.NONE;
         EyeExpression leftEye = eyeExpression(animationsEnabled && config.animateSleeping && sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, squinting);
         EyeExpression rightEye = eyeExpression(animationsEnabled && config.animateSleeping && sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, squinting);
@@ -1542,6 +1620,12 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         return EyeExpression.OPEN;
     }
 
+    private static boolean isAfkBlinking(float ageInTicks, int entityId) {
+        int offset = seededOffset(entityId, 53, AFK_BLINK_INTERVAL_TICKS);
+        int phase = Math.floorMod((int) ageInTicks - offset, AFK_BLINK_INTERVAL_TICKS);
+        return phase < AFK_BLINK_DURATION_TICKS;
+    }
+
     private static boolean isBlinking(AbstractClientPlayer player, float ageInTicks, ReactionsClientConfig config) {
         int baseInterval = Math.max(20, config.blinkIntervalTicks);
         int randomWindow = Math.max(20, baseInterval / 2);
@@ -1591,27 +1675,41 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         return Math.floorMod(value, maxExclusive);
     }
 
-    private static int mirroredIdleEye(AbstractClientPlayer player, float ageInTicks) {
+    private static IdleEyeAnimation idleEyeAnimation(AbstractClientPlayer player, float ageInTicks, int blinkTicks) {
         if (player.walkAnimation.speed() > 0.01F) {
             IDLE_STARTED_AT.remove(player.getId());
-            return 0;
+            return IdleEyeAnimation.NONE;
         }
 
         float idleStartedAt = IDLE_STARTED_AT.computeIfAbsent(player.getId(), id -> ageInTicks);
         int idleTicks = (int) (ageInTicks - idleStartedAt);
-        int cycleTick = Math.floorMod(idleTicks, IDLE_LOOK_CYCLE_TICKS);
-        if (cycleTick < IDLE_LOOK_DELAY_TICKS) {
-            return 0;
-        }
+        int cycleLength = IDLE_LOOK_CYCLE_TICKS + blinkTicks * 3;
+        int cycleTick = Math.floorMod(idleTicks, cycleLength);
+        return idleLookFrame(cycleTick - IDLE_LOOK_DELAY_TICKS, blinkTicks);
+    }
 
-        int phase = cycleTick - IDLE_LOOK_DELAY_TICKS;
+    private static IdleEyeAnimation idleLookFrame(int phase, int blinkTicks) {
+        int step = IDLE_LOOK_STEP_TICKS + blinkTicks;
+        if (phase < 0 || phase >= step * 3) {
+            return IdleEyeAnimation.NONE;
+        }
+        if (blinkTicks > 0) {
+            int segment = phase / step;
+            boolean blink = phase % step < blinkTicks;
+            int look = blink ? 0 : segment == 0 ? -1 : segment == 1 ? 1 : 0;
+            return new IdleEyeAnimation(look, blink, true);
+        }
         if (phase < IDLE_LOOK_STEP_TICKS) {
-            return -1;
+            return new IdleEyeAnimation(-1, false, true);
         }
         if (phase < IDLE_LOOK_STEP_TICKS * 2) {
-            return 1;
+            return new IdleEyeAnimation(1, false, true);
         }
-        return 0;
+        return new IdleEyeAnimation(0, false, true);
+    }
+
+    private record IdleEyeAnimation(int look, boolean blinking, boolean active) {
+        private static final IdleEyeAnimation NONE = new IdleEyeAnimation(0, false, false);
     }
 
     private static int mountedBackEye(AbstractClientPlayer player, float partialTick) {

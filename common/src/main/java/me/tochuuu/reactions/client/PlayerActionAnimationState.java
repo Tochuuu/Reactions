@@ -1,5 +1,8 @@
 package me.tochuuu.reactions.client;
 
+import me.tochuuu.reactions.network.ReactionsNetworking;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.entity.state.PlayerRenderState;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
@@ -26,8 +29,11 @@ public final class PlayerActionAnimationState {
     private static final double SUN_SQUINT_ENTER_DOT = Math.cos(Math.toRadians(12.0D));
     private static final double SUN_SQUINT_EXIT_DOT = Math.cos(Math.toRadians(15.0D));
     private static final double SUN_VISIBILITY_DISTANCE = 256.0D;
-    private static final Snapshot EMPTY = new Snapshot(MouthUseAnimation.NONE, false, false, 0.0F, false);
+    private static final int AFK_DELAY_TICKS = 20 * 60;
+    private static final float LOW_HEALTH_THRESHOLD = 6.0F;
+    private static final Snapshot EMPTY = new Snapshot(MouthUseAnimation.NONE, false, false, 0.0F, false, false, false, false);
     private static final Map<AbstractClientPlayer, SunVisibilitySample> SUN_VISIBILITY = new WeakHashMap<>();
+    private static final Map<AbstractClientPlayer, ActivitySample> ACTIVITY = new WeakHashMap<>();
     private static final Map<Integer, Snapshot> SNAPSHOTS = new HashMap<>();
     private static final Map<Integer, Float> FALL_DISTANCE_PEAKS = new HashMap<>();
     private static final Map<Integer, Float> VISIBLE_FALL_DISTANCE_PEAKS = new HashMap<>();
@@ -44,11 +50,53 @@ public final class PlayerActionAnimationState {
         int entityId = player.getId();
         MouthUseAnimation mouthUseAnimation = mouthUseAnimation(player);
         FallState fallState = fallState(player, state);
-        SNAPSHOTS.put(entityId, new Snapshot(mouthUseAnimation, fallState.surprise(), fallState.landingBlink(), mountedYawDelta(player, state, partialTick), sunSquint(player, partialTick)));
+        ActivitySample activity = ACTIVITY.get(player);
+        boolean alive = !player.isSpectator() && !player.isDeadOrDying();
+        boolean afk = alive && activity != null && player.tickCount - activity.lastActivityTick >= AFK_DELAY_TICKS;
+        boolean lowHealth = alive && player.getHealth() <= LOW_HEALTH_THRESHOLD;
+        // Vanilla does not send other players' hunger levels to clients.
+        boolean lowHunger = alive && player instanceof LocalPlayer localPlayer
+            && !localPlayer.getAbilities().mayfly && localPlayer.getFoodData().getFoodLevel() <= 6;
+        SNAPSHOTS.put(entityId, new Snapshot(mouthUseAnimation, fallState.surprise(), fallState.landingBlink(),
+            mountedYawDelta(player, state, partialTick), sunSquint(player, partialTick), afk, lowHealth, lowHunger));
     }
 
     public static Snapshot snapshot(int entityId) {
         return SNAPSHOTS.getOrDefault(entityId, EMPTY);
+    }
+
+    public static void onClientTick(Minecraft client) {
+        ReactionsClientConfig config = ReactionsClientConfig.get();
+        if (client.level == null || !config.enabled || !config.animateAfk) {
+            ACTIVITY.clear();
+            return;
+        }
+        for (AbstractClientPlayer player : client.level.players()) {
+            boolean manual = player == client.player ? ReactionsClient.manualEyeControl().active()
+                : ReactionsNetworking.remoteManualEyeControl(player.getId()) != 0;
+            boolean input = player == client.player && (client.player.input.keyPresses.forward()
+                || client.player.input.keyPresses.backward() || client.player.input.keyPresses.left()
+                || client.player.input.keyPresses.right() || client.player.input.keyPresses.jump()
+                || client.player.input.keyPresses.shift() || client.player.input.keyPresses.sprint()
+                || client.options.keyAttack.isDown() || client.options.keyUse.isDown());
+            updateActivity(player, manual || input);
+        }
+    }
+
+    private static void updateActivity(AbstractClientPlayer player, boolean input) {
+        int tick = player.tickCount;
+        ActivitySample previous = ACTIVITY.get(player);
+        if (previous != null && previous.tick == tick) {
+            return;
+        }
+        boolean active = previous == null || tick - previous.tick != 1 || input
+            || player.isUsingItem() || player.swinging || player.hurtTime > 0
+            || player.isSleeping() || player.isDeadOrDying()
+            || player.position().distanceToSqr(previous.position) > 0.0001D
+            || Math.abs(Mth.wrapDegrees(player.yHeadRot - previous.headYaw)) > 0.1F
+            || Math.abs(player.getXRot() - previous.pitch) > 0.1F;
+        ACTIVITY.put(player, active ? new ActivitySample(tick, tick, player.position(), player.yHeadRot, player.getXRot())
+            : new ActivitySample(tick, previous.lastActivityTick, previous.position, previous.headYaw, previous.pitch));
     }
 
     private static boolean sunSquint(AbstractClientPlayer player, float partialTick) {
@@ -195,7 +243,11 @@ public final class PlayerActionAnimationState {
         WHISTLING
     }
 
-    public record Snapshot(MouthUseAnimation mouthUseAnimation, boolean fallingSurprise, boolean landingBlink, float mountedYawDelta, boolean sunSquint) {
+    public record Snapshot(MouthUseAnimation mouthUseAnimation, boolean fallingSurprise, boolean landingBlink,
+                           float mountedYawDelta, boolean sunSquint, boolean afk, boolean lowHealth, boolean lowHunger) {
+    }
+
+    private record ActivitySample(int tick, int lastActivityTick, Vec3 position, float headYaw, float pitch) {
     }
 
     private record SunVisibilitySample(int tick, boolean visible) {

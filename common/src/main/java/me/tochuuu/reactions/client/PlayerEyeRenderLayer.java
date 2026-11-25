@@ -66,6 +66,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     private static final int IDLE_LOOK_STEP_TICKS = 14;
     private static final int IDLE_LOOK_ANIMATION_TICKS = IDLE_LOOK_STEP_TICKS * 3;
     private static final int IDLE_LOOK_CYCLE_TICKS = IDLE_LOOK_DELAY_TICKS + IDLE_LOOK_ANIMATION_TICKS;
+    private static final int AFK_BLINK_INTERVAL_TICKS = 140;
+    private static final int AFK_BLINK_DURATION_TICKS = 10;
     private static final int DIRECT_BLOCK_FOCUS_DOWN_SIGNAL = 101;
     private static final int DIRECT_BLOCK_FOCUS_UP_SIGNAL = -101;
     private static final float BOW_FULL_CHARGE_TICKS = 20.0F;
@@ -122,20 +124,33 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             : ReactionsClient.ManualEyeControl.fromNetwork(ReactionsNetworking.remoteManualEyeControl(state.id)).filtered(config);
         boolean manualEyeActive = animationsEnabled && !sleeping && manualEyeControl.active();
         boolean manualWideEyes = manualEyeActive && manualEyeControl.surprisesEyes();
-        boolean blinking = !manualEyeActive && !sleeping && animationsEnabled
-            && (config.animateBlinking && (preview != null ? preview.blinking() : isBlinking(state, config)) || config.animateLanding && actionState.landingBlink());
-        int blockFocusEye = animationsEnabled && config.animateBlockFocus && !blinking
+        boolean afkEyes = animationsEnabled && config.animateAfk && actionState.afk() && !sleeping && !manualEyeActive
+            && !state.isUsingItem && !(config.animateFalling && actionState.fallingSurprise())
+            && !(config.animateDamage && state.hasRedOverlay);
+        int blockFocusEye = animationsEnabled && config.animateBlockFocus
             ? preview != null ? preview.blockFocus() : blockFocusEye(state.id, isSelf) : 0;
-        int mountedEyeLook = animationsEnabled && config.animateVehicleLook && !blinking ? mountedBackEye(actionState) : 0;
-        int idleLook = 0;
+        int mountedEyeLook = animationsEnabled && config.animateVehicleLook ? mountedBackEye(actionState) : 0;
+        IdleEyeAnimation idle = IdleEyeAnimation.NONE;
         if (preview != null) {
-            idleLook = config.animateIdleLooking && !blinking && preview.is(PreviewAnimation.IDLE_LOOKING) ? preview.horizontalLook() : 0;
-        } else if (!config.animateIdleLooking || !animationsEnabled) {
+            if (config.animateIdleLookBlinking && preview.animation == PreviewAnimation.IDLE_LOOK_BLINKING) {
+                int cycleLength = Math.max(80, IDLE_LOOK_ANIMATION_TICKS + config.blinkDurationTicks * 3 + 24);
+                int phase = Math.floorMod((int) preview.ageInTicks, cycleLength);
+                idle = idleLookFrame(phase - 12, config.blinkDurationTicks);
+            } else if (config.animateIdleLooking && preview.is(PreviewAnimation.IDLE_LOOKING)) {
+                idle = new IdleEyeAnimation(preview.horizontalLook(), false, true);
+            }
+        } else if (!(config.animateIdleLooking || config.animateIdleLookBlinking) || !animationsEnabled || sleeping || afkEyes) {
             IDLE_STARTED_AT.remove(state.id);
-        } else if (!blinking && blockFocusEye == 0 && mountedEyeLook == 0) {
-            idleLook = mirroredIdleEye(state);
+        } else if (blockFocusEye == 0 && mountedEyeLook == 0) {
+            idle = idleEyeAnimation(state, config.animateIdleLookBlinking ? config.blinkDurationTicks : 0);
         }
-        int eyeLook = blockFocusEye != 0 ? blockFocusEye : mountedEyeLook != 0 ? mountedEyeLook : idleLook;
+        boolean idleBlink = config.animateIdleLookBlinking && idle.active;
+        boolean blinking = !manualEyeActive && !sleeping && animationsEnabled
+            && (config.animateLanding && actionState.landingBlink()
+                || (idleBlink ? idle.blinking : afkEyes ? isAfkBlinking(state)
+                    : config.animateBlinking && (preview != null ? preview.blinking() : isBlinking(state, config))));
+        int eyeLook = blinking ? 0
+            : blockFocusEye != 0 ? blockFocusEye : mountedEyeLook != 0 ? mountedEyeLook : idle.look;
         HumanoidArm spyglassArm = config.animateSpyglass
             ? preview != null ? preview.is(PreviewAnimation.SPYGLASS) ? HumanoidArm.LEFT : null : spyglassUseArm(state) : null;
         HumanoidArm bowArm = bowUseArm(state);
@@ -145,7 +160,9 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         boolean fallingSurprise = animationsEnabled && config.animateFalling && actionState.fallingSurprise() || manualWideEyes
             || preview != null && config.showEyebrows && preview.is(PreviewAnimation.EYEBROWS);
         boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallingSurprise;
-        boolean squinting = bowSquint || config.animateSunSquint && actionState.sunSquint() && !manualEyeActive && !hurtSclera;
+        boolean automaticSquint = config.animateSunSquint && actionState.sunSquint() || afkEyes
+            || config.animateLowHealth && actionState.lowHealth() || config.animateLowHunger && actionState.lowHunger();
+        boolean squinting = bowSquint || animationsEnabled && automaticSquint && !manualEyeActive && !hurtSclera;
         boolean sleepingEyes = animationsEnabled && config.animateSleeping && sleeping;
         EyeExpression leftEye = eyeExpression(sleepingEyes, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, squinting);
         EyeExpression rightEye = eyeExpression(sleepingEyes, animationsEnabled, blinking, spyglassArm == HumanoidArm.RIGHT, squinting);
@@ -245,7 +262,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     }
 
     public enum PreviewAnimation {
-        BLINKING, IDLE_LOOKING, SLEEPING, SPYGLASS, SUN_SQUINT, DAMAGE, FALLING, LANDING, BLOCK_FOCUS,
+        BLINKING, IDLE_LOOKING, IDLE_LOOK_BLINKING, AFK, LOW_HEALTH, LOW_HUNGER,
+        SLEEPING, SPYGLASS, SUN_SQUINT, DAMAGE, FALLING, LANDING, BLOCK_FOCUS,
         VEHICLE_LOOK, BOW_SQUINT, EYEBROWS, EATING, DRINKING, HORN, ADVANCEMENTS,
         MANUAL_CLOSING, MANUAL_SQUINTING, MANUAL_WIDENING, MANUAL_LOOKING, SKEPTICAL
     }
@@ -289,7 +307,8 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
                 : is(PreviewAnimation.HORN) ? PlayerActionAnimationState.MouthUseAnimation.WHISTLING : PlayerActionAnimationState.MouthUseAnimation.NONE;
             float yaw = is(PreviewAnimation.VEHICLE_LOOK) ? phase() < 30 ? -90.0F : 90.0F : 0.0F;
             boolean landing = animation == PreviewAnimation.LANDING && phase() >= 12 && phase() < 16;
-            return new PlayerActionAnimationState.Snapshot(mouth, is(PreviewAnimation.FALLING), landing, yaw, is(PreviewAnimation.SUN_SQUINT));
+            return new PlayerActionAnimationState.Snapshot(mouth, is(PreviewAnimation.FALLING), landing, yaw,
+                is(PreviewAnimation.SUN_SQUINT), is(PreviewAnimation.AFK), is(PreviewAnimation.LOW_HEALTH), is(PreviewAnimation.LOW_HUNGER));
         }
 
         private ReactionsClient.ManualEyeControl manualControl() {
@@ -1276,6 +1295,15 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return phase < config.blinkDurationTicks;
     }
 
+    private static boolean isAfkBlinking(AvatarRenderState state) {
+        if (state instanceof PreviewState preview) {
+            return preview.phase() >= 20 && preview.phase() < 20 + AFK_BLINK_DURATION_TICKS;
+        }
+        int offset = seededOffset(state.id, 53, AFK_BLINK_INTERVAL_TICKS);
+        int phase = Math.floorMod((int) state.ageInTicks - offset, AFK_BLINK_INTERVAL_TICKS);
+        return phase < AFK_BLINK_DURATION_TICKS;
+    }
+
     private static HumanoidArm spyglassUseArm(AvatarRenderState state) {
         if (!state.isUsingItem || state.useItemHand == null || state.mainArm == null) {
             return null;
@@ -1330,27 +1358,41 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
         return Math.floorMod(value, maxExclusive);
     }
 
-    private static int mirroredIdleEye(AvatarRenderState state) {
+    private static IdleEyeAnimation idleEyeAnimation(AvatarRenderState state, int blinkTicks) {
         if (state.walkAnimationSpeed > 0.01F) {
             IDLE_STARTED_AT.remove(state.id);
-            return 0;
+            return IdleEyeAnimation.NONE;
         }
 
         float idleStartedAt = IDLE_STARTED_AT.computeIfAbsent(state.id, id -> state.ageInTicks);
         int idleTicks = (int) (state.ageInTicks - idleStartedAt);
-        int cycleTick = Math.floorMod(idleTicks, IDLE_LOOK_CYCLE_TICKS);
-        if (cycleTick < IDLE_LOOK_DELAY_TICKS) {
-            return 0;
-        }
+        int cycleLength = IDLE_LOOK_CYCLE_TICKS + blinkTicks * 3;
+        int cycleTick = Math.floorMod(idleTicks, cycleLength);
+        return idleLookFrame(cycleTick - IDLE_LOOK_DELAY_TICKS, blinkTicks);
+    }
 
-        int phase = cycleTick - IDLE_LOOK_DELAY_TICKS;
+    private static IdleEyeAnimation idleLookFrame(int phase, int blinkTicks) {
+        int step = IDLE_LOOK_STEP_TICKS + blinkTicks;
+        if (phase < 0 || phase >= step * 3) {
+            return IdleEyeAnimation.NONE;
+        }
+        if (blinkTicks > 0) {
+            int segment = phase / step;
+            boolean blink = phase % step < blinkTicks;
+            int look = blink ? 0 : segment == 0 ? -1 : segment == 1 ? 1 : 0;
+            return new IdleEyeAnimation(look, blink, true);
+        }
         if (phase < IDLE_LOOK_STEP_TICKS) {
-            return -1;
+            return new IdleEyeAnimation(-1, false, true);
         }
         if (phase < IDLE_LOOK_STEP_TICKS * 2) {
-            return 1;
+            return new IdleEyeAnimation(1, false, true);
         }
-        return 0;
+        return new IdleEyeAnimation(0, false, true);
+    }
+
+    private record IdleEyeAnimation(int look, boolean blinking, boolean active) {
+        private static final IdleEyeAnimation NONE = new IdleEyeAnimation(0, false, false);
     }
 
     private static int mountedBackEye(PlayerActionAnimationState.Snapshot actionState) {

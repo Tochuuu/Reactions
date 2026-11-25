@@ -1,6 +1,7 @@
 package me.tochuuu.reactions.client;
 
 import com.mojang.authlib.GameProfile;
+import net.minecraft.ChatFormatting;
 import me.tochuuu.reactions.client.PlayerEyeRenderLayer.PreviewAnimation;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.gui.GuiGraphics;
@@ -18,6 +19,7 @@ import java.util.function.Supplier;
 
 public final class ReactionsAnimationsScreen extends Screen {
     private static final int PANEL_WIDTH = 340;
+    private static final ReactionsClientConfig DEFAULT_ANIMATIONS = new ReactionsClientConfig();
     private final Screen parent;
     private final List<AnimationOption> animationOptions;
     private Category category = Category.EYES;
@@ -95,9 +97,9 @@ public final class ReactionsAnimationsScreen extends Screen {
             next.active = page + 1 < pageCount;
         }
         int third = (panelWidth - gap * 2) / 3;
-        addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.reset"), button -> resetAnimations())
-            .bounds(x, footerY, third, buttonHeight)
-            .tooltip(Tooltip.create(Component.translatable("gui.reactions.anim.reset.tooltip"))).build());
+        Button reset = addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.reset"), button -> resetAnimations())
+            .bounds(x, footerY, third, buttonHeight).build());
+        reset.active = category != Category.EYEBROWS;
         addRenderableWidget(Button.builder(Component.translatable("gui.reactions.button.preview"), button -> {
             previewIndex = allOptions().stream().map(AnimationOption::animation).toList().indexOf(options.get(page * rows).animation);
             previewOpen = true;
@@ -141,9 +143,8 @@ public final class ReactionsAnimationsScreen extends Screen {
 
     private void resetAnimations() {
         ReactionsClientConfig config = ReactionsClientConfig.get();
-        ReactionsClientConfig defaults = new ReactionsClientConfig();
         for (AnimationOption option : allOptions()) {
-            if (option.enabled.test(config) != option.enabled.test(defaults)) {
+            if (option.changedFromDefault()) {
                 option.toggle.accept(config);
             }
         }
@@ -249,17 +250,20 @@ public final class ReactionsAnimationsScreen extends Screen {
             case EYES -> List.of(
                 new AnimationOption(PreviewAnimation.BLINKING, "gui.reactions.anim.blinking", c -> c.animateBlinking, c -> c.animateBlinking = !c.animateBlinking),
                 new AnimationOption(PreviewAnimation.IDLE_LOOKING, "gui.reactions.anim.idle_looking", c -> c.animateIdleLooking, c -> c.animateIdleLooking = !c.animateIdleLooking),
+                new AnimationOption(PreviewAnimation.IDLE_LOOK_BLINKING, "gui.reactions.anim.idle_look_blinking", c -> c.animateIdleLookBlinking, c -> c.animateIdleLookBlinking = !c.animateIdleLookBlinking),
+                new AnimationOption(PreviewAnimation.AFK, "gui.reactions.anim.tired", c -> c.animateAfk, c -> c.animateAfk = !c.animateAfk),
                 new AnimationOption(PreviewAnimation.SLEEPING, "gui.reactions.anim.sleeping", c -> c.animateSleeping, c -> c.animateSleeping = !c.animateSleeping),
                 new AnimationOption(PreviewAnimation.SPYGLASS, "gui.reactions.anim.spyglass", c -> c.animateSpyglass, c -> c.animateSpyglass = !c.animateSpyglass),
                 new AnimationOption(PreviewAnimation.SUN_SQUINT, "gui.reactions.anim.sun_squint", c -> c.animateSunSquint, c -> c.animateSunSquint = !c.animateSunSquint));
             case REACTIONS -> List.of(
+                new AnimationOption(PreviewAnimation.LOW_HEALTH, "gui.reactions.anim.low_health", c -> c.animateLowHealth, c -> c.animateLowHealth = !c.animateLowHealth),
+                new AnimationOption(PreviewAnimation.LOW_HUNGER, "gui.reactions.anim.low_hunger", c -> c.animateLowHunger, c -> c.animateLowHunger = !c.animateLowHunger),
                 new AnimationOption(PreviewAnimation.DAMAGE, "gui.reactions.anim.damage", c -> c.animateDamage, c -> c.animateDamage = !c.animateDamage),
                 new AnimationOption(PreviewAnimation.FALLING, "gui.reactions.anim.falling", c -> c.animateFalling, c -> c.animateFalling = !c.animateFalling),
                 new AnimationOption(PreviewAnimation.LANDING, "gui.reactions.anim.landing", c -> c.animateLanding, c -> c.animateLanding = !c.animateLanding),
                 new AnimationOption(PreviewAnimation.BLOCK_FOCUS, "gui.reactions.anim.block_focus", c -> c.animateBlockFocus, c -> c.animateBlockFocus = !c.animateBlockFocus),
                 new AnimationOption(PreviewAnimation.VEHICLE_LOOK, "gui.reactions.anim.vehicle_look", c -> c.animateVehicleLook, c -> c.animateVehicleLook = !c.animateVehicleLook),
-                new AnimationOption(PreviewAnimation.BOW_SQUINT, "gui.reactions.bow_squint", c -> c.animateBowShooting, c -> c.animateBowShooting = !c.animateBowShooting),
-                new AnimationOption(PreviewAnimation.EYEBROWS, "gui.reactions.eyebrows", c -> c.showEyebrows, c -> c.showEyebrows = !c.showEyebrows));
+                new AnimationOption(PreviewAnimation.BOW_SQUINT, "gui.reactions.bow_squint", c -> c.animateBowShooting, c -> c.animateBowShooting = !c.animateBowShooting));
             case MOUTH -> List.of(
                 new AnimationOption(PreviewAnimation.EATING, "gui.reactions.anim.eating", c -> c.animateEating, c -> c.animateEating = !c.animateEating),
                 new AnimationOption(PreviewAnimation.DRINKING, "gui.reactions.anim.drinking", c -> c.animateDrinking, c -> c.animateDrinking = !c.animateDrinking),
@@ -271,6 +275,8 @@ public final class ReactionsAnimationsScreen extends Screen {
                 new AnimationOption(PreviewAnimation.MANUAL_WIDENING, "gui.reactions.anim.manual_widening", c -> c.animateManualWidening, c -> c.animateManualWidening = !c.animateManualWidening),
                 new AnimationOption(PreviewAnimation.MANUAL_LOOKING, "gui.reactions.anim.manual_looking", c -> c.animateManualLooking, c -> c.animateManualLooking = !c.animateManualLooking),
                 new AnimationOption(PreviewAnimation.SKEPTICAL, "gui.reactions.skeptical_expression", c -> c.animateSkepticalExpression, c -> c.animateSkepticalExpression = !c.animateSkepticalExpression));
+            case EYEBROWS -> List.of(
+                new AnimationOption(PreviewAnimation.EYEBROWS, "gui.reactions.eyebrows", c -> c.showEyebrows, c -> c.showEyebrows = !c.showEyebrows));
         };
     }
 
@@ -278,7 +284,8 @@ public final class ReactionsAnimationsScreen extends Screen {
         EYES("gui.reactions.anim.category.eyes"),
         REACTIONS("gui.reactions.anim.category.reactions"),
         MOUTH("gui.reactions.anim.category.mouth"),
-        MANUAL("gui.reactions.anim.category.manual");
+        MANUAL("gui.reactions.anim.category.manual"),
+        EYEBROWS("gui.reactions.eyebrows");
 
         private final String key;
 
@@ -289,8 +296,17 @@ public final class ReactionsAnimationsScreen extends Screen {
 
     private record AnimationOption(PreviewAnimation animation, String key, Predicate<ReactionsClientConfig> enabled, Consumer<ReactionsClientConfig> toggle) {
         private Component text() {
-            return Component.translatable("gui.reactions.toggle", Component.translatable(key),
+            var label = Component.translatable(key);
+            if (changedFromDefault()) {
+                label.withStyle(ChatFormatting.YELLOW, ChatFormatting.UNDERLINE);
+            }
+            return Component.translatable("gui.reactions.toggle", label,
                 Component.translatable(enabled.test(ReactionsClientConfig.get()) ? "gui.reactions.on.short" : "gui.reactions.off.short"));
+        }
+
+        private boolean changedFromDefault() {
+            return animation != PreviewAnimation.EYEBROWS
+                && enabled.test(ReactionsClientConfig.get()) != enabled.test(DEFAULT_ANIMATIONS);
         }
     }
 }

@@ -88,6 +88,7 @@ public final class ReactionsClient {
         SQUINT_EYES_STATE.update(MANUAL_SQUINT_EYES);
         LOOK_EYES_STATE.update(MANUAL_LOOK_EYES, LOOK_RELEASE_GRACE_TICKS);
         RAISE_EYEBROW_STATE.update(MANUAL_RAISE_EYEBROW);
+        PlayerActionAnimationState.onClientTick(client);
         ReactionsNetworking.sendLocalManualEyeControl(manualEyeControl().networkValue());
         while (OPEN_CONFIG.consumeClick()) {
             Minecraft minecraft = Minecraft.getInstance();

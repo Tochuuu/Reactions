@@ -163,7 +163,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             || preview != null && config.showEyebrows && preview.is(PreviewAnimation.EYEBROWS);
         boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallingSurprise;
         boolean automaticSquint = config.animateSunSquint && actionState.sunSquint() || afkEyes
-            || config.animateLowHealth && actionState.lowHealth() || config.animateLowHunger && actionState.lowHunger();
+            || config.animateLowHealth && actionState.lowHealth();
         boolean squinting = bowSquint || animationsEnabled && automaticSquint && !manualEyeActive && !hurtSclera;
         boolean sleepingEyes = animationsEnabled && config.animateSleeping && sleeping;
         EyeExpression leftEye = eyeExpression(sleepingEyes, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, squinting);
@@ -272,7 +272,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
     }
 
     public enum PreviewAnimation {
-        BLINKING, IDLE_LOOKING, IDLE_LOOK_BLINKING, AFK, LOW_HEALTH, LOW_HUNGER,
+        BLINKING, IDLE_LOOKING, IDLE_LOOK_BLINKING, AFK, LOW_HEALTH,
         SLEEPING, SPYGLASS, SUN_SQUINT, DAMAGE, FALLING, LANDING, BLOCK_FOCUS,
         VEHICLE_LOOK, BOW_SQUINT, EYEBROWS, EATING, DRINKING, HORN, ADVANCEMENTS,
         MANUAL_CLOSING, MANUAL_SQUINTING, MANUAL_WIDENING, MANUAL_LOOKING, SKEPTICAL
@@ -318,7 +318,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer<AvatarRenderState, P
             float yaw = is(PreviewAnimation.VEHICLE_LOOK) ? phase() < 30 ? -90.0F : 90.0F : 0.0F;
             boolean landing = animation == PreviewAnimation.LANDING && phase() >= 12 && phase() < 16;
             return new PlayerActionAnimationState.Snapshot(mouth, is(PreviewAnimation.FALLING), landing, yaw,
-                is(PreviewAnimation.SUN_SQUINT), is(PreviewAnimation.AFK), is(PreviewAnimation.LOW_HEALTH), is(PreviewAnimation.LOW_HUNGER));
+                is(PreviewAnimation.SUN_SQUINT), is(PreviewAnimation.AFK), is(PreviewAnimation.LOW_HEALTH));
         }
 
         private ReactionsClient.ManualEyeControl manualControl() {

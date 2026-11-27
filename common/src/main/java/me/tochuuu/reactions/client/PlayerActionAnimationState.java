@@ -2,7 +2,6 @@ package me.tochuuu.reactions.client;
 
 import me.tochuuu.reactions.network.ReactionsNetworking;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
@@ -33,7 +32,7 @@ public final class PlayerActionAnimationState {
     private static final double SUN_VISIBILITY_DISTANCE = 256.0D;
     private static final int AFK_DELAY_TICKS = 20 * 60;
     private static final float LOW_HEALTH_THRESHOLD = 6.0F;
-    private static final Snapshot EMPTY = new Snapshot(MouthUseAnimation.NONE, false, false, 0.0F, false, false, false, false);
+    private static final Snapshot EMPTY = new Snapshot(MouthUseAnimation.NONE, false, false, 0.0F, false, false, false);
     private static final Map<Avatar, SunVisibilitySample> SUN_VISIBILITY = new WeakHashMap<>();
     private static final Map<Avatar, ActivitySample> ACTIVITY = new WeakHashMap<>();
     private static final Map<Integer, Snapshot> SNAPSHOTS = new HashMap<>();
@@ -56,11 +55,8 @@ public final class PlayerActionAnimationState {
         boolean alive = player instanceof Player actualPlayer && !actualPlayer.isSpectator() && !player.isDeadOrDying();
         boolean afk = alive && activity != null && player.tickCount - activity.lastActivityTick >= AFK_DELAY_TICKS;
         boolean lowHealth = alive && player.getHealth() <= LOW_HEALTH_THRESHOLD;
-        // Vanilla does not send other players' hunger levels to clients.
-        boolean lowHunger = alive && player instanceof LocalPlayer localPlayer
-            && !localPlayer.getAbilities().mayfly && !localPlayer.getFoodData().hasEnoughFood();
         SNAPSHOTS.put(entityId, new Snapshot(mouthUseAnimation, fallState.surprise(), fallState.landingBlink(),
-            mountedYawDelta(player, state, partialTick), sunSquint(player, partialTick), afk, lowHealth, lowHunger));
+            mountedYawDelta(player, state, partialTick), sunSquint(player, partialTick), afk, lowHealth));
     }
 
     public static Snapshot snapshot(int entityId) {
@@ -246,7 +242,7 @@ public final class PlayerActionAnimationState {
     }
 
     public record Snapshot(MouthUseAnimation mouthUseAnimation, boolean fallingSurprise, boolean landingBlink,
-                           float mountedYawDelta, boolean sunSquint, boolean afk, boolean lowHealth, boolean lowHunger) {
+                           float mountedYawDelta, boolean sunSquint, boolean afk, boolean lowHealth) {
     }
 
     private record ActivitySample(int tick, int lastActivityTick, Vec3 position, float headYaw, float pitch) {

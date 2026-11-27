@@ -181,9 +181,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallingSurprise;
         boolean alive = !player.isDeadOrDying() && !player.isSpectator();
         boolean automaticSquint = config.animateSunSquint && sunSquint(player, partialTick) || afkEyes
-            || config.animateLowHealth && alive && player.getHealth() <= LOW_HEALTH_THRESHOLD
-            || config.animateLowHunger && alive && player == minecraft.player
-                && !minecraft.player.getAbilities().mayfly && minecraft.player.getFoodData().getFoodLevel() <= 6;
+            || config.animateLowHealth && alive && player.getHealth() <= LOW_HEALTH_THRESHOLD;
         boolean squinting = bowSquint || animationsEnabled && automaticSquint && !manualEyeActive && !hurtSclera;
         MouthUseAnimation mouthUseAnimation = mouthAnimationsEnabled ? mouthUseAnimation(player) : MouthUseAnimation.NONE;
         EyeExpression leftEye = eyeExpression(animationsEnabled && config.animateSleeping && sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, squinting);
@@ -344,7 +342,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
     private record SunVisibilitySample(int tick, boolean visible) {}
 
     public enum PreviewAnimation {
-        BLINKING, IDLE_LOOKING, IDLE_LOOK_BLINKING, AFK, LOW_HEALTH, LOW_HUNGER,
+        BLINKING, IDLE_LOOKING, IDLE_LOOK_BLINKING, AFK, LOW_HEALTH,
         SLEEPING, SPYGLASS, SUN_SQUINT, DAMAGE, FALLING, LANDING, BLOCK_FOCUS,
         VEHICLE_LOOK, BOW_SQUINT, EYEBROWS, EATING, DRINKING, HORN, ADVANCEMENTS,
         MANUAL_CLOSING, MANUAL_SQUINTING, MANUAL_WIDENING, MANUAL_LOOKING, SKEPTICAL
@@ -458,8 +456,7 @@ public final class PlayerEyeRenderLayer extends RenderLayer {
         boolean fallingSurprise = animationsEnabled && config.animateFalling && fallReaction == FallEyeReaction.SURPRISE || manualWideEyes || config.showEyebrows && preview.is(PreviewAnimation.EYEBROWS);
         boolean hurtSclera = damageReaction == DamageEyeReaction.SCLERA || fallingSurprise;
         boolean automaticSquint = config.animateSunSquint && preview.is(PreviewAnimation.SUN_SQUINT) || afkEyes
-            || config.animateLowHealth && preview.is(PreviewAnimation.LOW_HEALTH)
-            || config.animateLowHunger && preview.is(PreviewAnimation.LOW_HUNGER);
+            || config.animateLowHealth && preview.is(PreviewAnimation.LOW_HEALTH);
         boolean squinting = bowSquint || automaticSquint && !manualEyeActive && !hurtSclera;
         MouthUseAnimation mouthUseAnimation = mouthAnimationsEnabled ? preview.actions().mouthUseAnimation() : MouthUseAnimation.NONE;
         EyeExpression leftEye = eyeExpression(animationsEnabled && config.animateSleeping && sleeping, animationsEnabled, blinking, spyglassArm == HumanoidArm.LEFT, squinting);

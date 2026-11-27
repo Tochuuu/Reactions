@@ -236,7 +236,6 @@ public final class ReactionsAnimationsScreen extends Screen {
                 new AnimationOption(PreviewAnimation.SUN_SQUINT, "gui.reactions.anim.sun_squint", c -> c.animateSunSquint, c -> c.animateSunSquint = !c.animateSunSquint));
             case REACTIONS -> List.of(
                 new AnimationOption(PreviewAnimation.LOW_HEALTH, "gui.reactions.anim.low_health", c -> c.animateLowHealth, c -> c.animateLowHealth = !c.animateLowHealth),
-                new AnimationOption(PreviewAnimation.LOW_HUNGER, "gui.reactions.anim.low_hunger", c -> c.animateLowHunger, c -> c.animateLowHunger = !c.animateLowHunger),
                 new AnimationOption(PreviewAnimation.DAMAGE, "gui.reactions.anim.damage", c -> c.animateDamage, c -> c.animateDamage = !c.animateDamage),
                 new AnimationOption(PreviewAnimation.FALLING, "gui.reactions.anim.falling", c -> c.animateFalling, c -> c.animateFalling = !c.animateFalling),
                 new AnimationOption(PreviewAnimation.LANDING, "gui.reactions.anim.landing", c -> c.animateLanding, c -> c.animateLanding = !c.animateLanding),

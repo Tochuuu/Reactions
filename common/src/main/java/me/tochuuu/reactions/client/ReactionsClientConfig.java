@@ -39,7 +39,6 @@ public final class ReactionsClientConfig {
     public boolean animateIdleLookBlinking = false;
     public boolean animateAfk = false;
     public boolean animateLowHealth = false;
-    public boolean animateLowHunger = false;
     public boolean animateSleeping = true;
     public boolean animateSpyglass = true;
     public boolean animateSunSquint = false;
